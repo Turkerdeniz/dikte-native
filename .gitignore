@@ -1,0 +1,13 @@
+.build/
+build/
+.swiftpm/
+*.part
+*.xcresult
+*.ips
+*.crash
+*.p12
+*.pem
+*.key
+*.cer
+DerivedData/
+.DS_Store
