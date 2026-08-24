@@ -19,6 +19,7 @@ Build script aynı paketi release build'den önce otomatik çalıştırır. Test
 - overlay boyut/konum politikası
 - CPU/RAM/disk tanı snapshot'ı
 - memory-pressure actor köprüsü ve model bırakma politikası
+- idle model release timer'ının çalışması, iptali ve yeni kayıtla değiştirilmesi
 - crash breadcrumb içerik sınırı
 - kaldırma bakım komutu parser'ı
 - streaming model SHA-256 ve değiştirilmiş dosyayı reddeden verification receipt

@@ -41,6 +41,7 @@ final class AppModel: ObservableObject {
     private var memoryPressureMonitor: MemoryPressureMonitor?
     private var memoryPressureTask: Task<Void, Never>?
     private var modelReleaseTask: Task<Void, Never>?
+    private let modelIdleReleaseScheduler = ModelIdleReleaseScheduler()
     private var memoryPressureLevel: MemoryPressureLevel = .normal
     private var pendingMemoryRelease = false
     private let breadcrumbStore = CrashBreadcrumbStore()
@@ -92,6 +93,7 @@ final class AppModel: ObservableObject {
             alertMessage = "Mikrofon izni verilmedi. General bölümündeki Mikrofon İzni düğmesinden Sistem Ayarları’nı açabilirsin."
             return
         }
+        modelIdleReleaseScheduler.cancel()
         do {
             let startedAt = Date()
             breadcrumbStore.begin(stage: "arming-1", modelLoaded: modelStore.isLoaded,
@@ -160,6 +162,7 @@ final class AppModel: ObservableObject {
         hotKey.unregister(); recorder.stopImmediately(); modelStore.cancelDownload()
         armingTimeoutTask?.cancel(); maximumRecordingTask?.cancel()
         cancelModelPreload(); processingTask?.cancel(); modelReleaseTask?.cancel()
+        modelIdleReleaseScheduler.cancel()
         memoryPressureTask?.cancel(); memoryPressureTask = nil
         memoryPressureMonitor?.cancel(); memoryPressureMonitor = nil
         performanceTracker = nil
@@ -579,6 +582,7 @@ final class AppModel: ObservableObject {
     }
 
     private func releaseWhisperModel(reason: String) {
+        modelIdleReleaseScheduler.cancel()
         guard modelReleaseTask == nil else { return }
         modelReleaseTask = Task { [weak self] in
             guard let self else { return }
@@ -606,6 +610,12 @@ final class AppModel: ObservableObject {
             pendingMemoryRelease = false
             Self.lifecycleLog.notice("Applying pending Whisper release on return to idle")
             releaseWhisperModel(reason: "return-to-idle")
+        } else if modelStore.isLoaded {
+            modelIdleReleaseScheduler.schedule(after: 120) { [weak self] in
+                guard let self, self.phase == .idle else { return }
+                Self.lifecycleLog.notice("Applying Whisper release after idle timeout")
+                self.releaseWhisperModel(reason: "idle-timeout")
+            }
         }
     }
 

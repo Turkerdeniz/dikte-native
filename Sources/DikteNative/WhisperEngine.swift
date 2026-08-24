@@ -37,10 +37,8 @@ actor WhisperEngine {
     static let threadCount: Int32 = 4
     private var context: OpaquePointer?
     private var loadedModelURL: URL?
-    private var unloadTask: Task<Void, Never>?
 
     func load(modelURL: URL) throws {
-        unloadTask?.cancel()
         if context != nil, loadedModelURL == modelURL { return }
         if let context { whisper_free(context) }
         context = nil
@@ -61,7 +59,6 @@ actor WhisperEngine {
                                           detectLanguage: language == .automatic,
                                           promptTerms: promptTerms, noSpeechThreshold: noSpeechThreshold,
                                           threadCount: threadCount)
-        scheduleUnload()
         return WhisperTranscript(text: result.text, meanTokenProbability: result.meanTokenProbability,
                                  lowConfidenceTokenRatio: result.tokenCount > 0
                                     ? Float(result.lowConfidenceTokenCount) / Float(result.tokenCount) : 0,
@@ -86,7 +83,6 @@ actor WhisperEngine {
             lowConfidenceTokenCount += result.lowConfidenceTokenCount
             if detectedLanguage == nil { detectedLanguage = result.detectedLanguage }
         }
-        scheduleUnload()
         return WhisperTranscript(text: TranscriptAssembler.join(parts),
                                  meanTokenProbability: tokenCount > 0 ? weightedProbability / Float(tokenCount) : 0,
                                  lowConfidenceTokenRatio: tokenCount > 0 ? Float(lowConfidenceTokenCount) / Float(tokenCount) : 0,
@@ -161,18 +157,8 @@ actor WhisperEngine {
     }
 
     func unload() {
-        unloadTask?.cancel(); unloadTask = nil
         if let context { whisper_free(context) }
         context = nil
         loadedModelURL = nil
-    }
-
-    private func scheduleUnload() {
-        unloadTask?.cancel()
-        unloadTask = Task {
-            try? await Task.sleep(for: .seconds(120))
-            guard !Task.isCancelled else { return }
-            self.unload()
-        }
     }
 }

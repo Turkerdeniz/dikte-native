@@ -30,6 +30,7 @@ Bu dosya kullanıcıya ve bakım yapan geliştiriciye dönük önemli değişikl
 
 - Memory-pressure olayları actor güvenli `AsyncStream` köprüsüne taşındı.
 - Aktif işlem sırasında model unload erteleniyor; idle/preload durumunda güvenli biçimde bırakılıyor.
+- Normal 120 saniyelik model bırakma timer'ı AppModel'e taşındı; yeni kayıt iptal ediyor ve bütün pipeline çıkışları aynı loglu release yolunu kullanıyor.
 - Crash breadcrumb yalnız session/aşama/model/bellek baskısı metadata'sı saklıyor.
 - Whisper dört thread'e sabitlendi; ses tamponları yeniden kullanılıyor ve waveform 20 FPS çalışıyor.
 - Model bütünlüğü sabit 4 MB streaming buffer ile doğrulanıyor; değişmeyen model sonraki açılışlarda atomik receipt üzerinden yeniden hash edilmeden kabul ediliyor.

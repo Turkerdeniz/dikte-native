@@ -94,7 +94,7 @@ Thread kayıpsa bir kez yeni thread denenir. Her hata, timeout ve iptal temizlen
 
 ## Model ve bellek yaşam döngüsü
 
-Whisper ilk kayıtta arka planda hazırlanabilir ve son kullanımdan 120 saniye sonra bırakılır. `MemoryPressureMonitor`, DispatchSource olaylarını bir `AsyncStream` üzerinden MainActor'a taşır:
+Whisper ilk kayıtta arka planda hazırlanabilir. Tek sahibi AppModel olan idle scheduler, bütün pipeline çıkışları `returnToIdle()` yoluna ulaştıktan 120 saniye sonra modeli loglu release yoluyla bırakır; yeni kayıt timer'ı iptal eder. `MemoryPressureMonitor`, DispatchSource olaylarını bir `AsyncStream` üzerinden MainActor'a taşır:
 
 - `idle`: warning/critical modelin hemen bırakılmasını ister.
 - `arming/recording`: preload iptal edilir, ses kaydı kesilmez.
