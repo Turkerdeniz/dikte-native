@@ -1,5 +1,15 @@
 import AppKit
+import Darwin
+import ServiceManagement
 import SwiftUI
+
+enum MaintenanceCommand: Equatable {
+    case unregisterLoginItem
+
+    static func parse(arguments: [String]) -> MaintenanceCommand? {
+        arguments.contains("--maintenance-unregister-login-item") ? .unregisterLoginItem : nil
+    }
+}
 
 @main
 struct DikteApp: App {
@@ -66,6 +76,9 @@ extension Notification.Name { static let dikteOpenSettings = Notification.Name("
 final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var model: AppModel?
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if let command = MaintenanceCommand.parse(arguments: CommandLine.arguments) {
+            runMaintenance(command)
+        }
         NSApp.setActivationPolicy(.accessory)
         DispatchQueue.main.async { NotificationCenter.default.post(name: .dikteOpenSettings, object: nil) }
     }
@@ -74,5 +87,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         model?.shutdown(); return .terminateNow
+    }
+
+    private func runMaintenance(_ command: MaintenanceCommand) -> Never {
+        NSApp.setActivationPolicy(.prohibited)
+        do {
+            switch command {
+            case .unregisterLoginItem:
+                switch SMAppService.mainApp.status {
+                case .enabled, .requiresApproval:
+                    try SMAppService.mainApp.unregister()
+                case .notRegistered, .notFound:
+                    break
+                @unknown default:
+                    try SMAppService.mainApp.unregister()
+                }
+                writeMaintenanceMessage("Dikte login item kaydı kaldırıldı.\n", to: .standardOutput)
+            }
+            exit(EXIT_SUCCESS)
+        } catch {
+            writeMaintenanceMessage("Dikte bakım işlemi başarısız: \(error.localizedDescription)\n",
+                                    to: .standardError)
+            exit(EXIT_FAILURE)
+        }
+    }
+
+    private func writeMaintenanceMessage(_ message: String, to handle: FileHandle) {
+        if let data = message.data(using: .utf8) { try? handle.write(contentsOf: data) }
     }
 }
