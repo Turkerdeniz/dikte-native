@@ -103,7 +103,7 @@ Varsayılan kaldırma model, geçmiş ve ayarları korur:
 ./scripts/uninstall.sh --remove-data
 ```
 
-Betik farklı bundle kimliğine sahip bir uygulamaya dokunmaz; login item ve LaunchServices kaydını uygulama taşınmadan önce kaldırır. Hiçbir mod `rm` ile kalıcı silme yapmaz.
+Betik farklı bundle kimliğine sahip bir uygulamaya dokunmaz; login item ve LaunchServices kaydını kaldırır. Çöp'teki geri alınabilir uygulama yedeği macOS tarafından yeniden indekslenmemesi için `.app.disabled` uzantısıyla tutulur. Hiçbir mod `rm` ile kalıcı silme yapmaz.
 
 ## Daha ayrıntılı belgeler
 

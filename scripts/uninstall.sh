@@ -32,11 +32,15 @@ done
 
 trash_destination() {
   local source="$1"
+  local label="$2"
   local name="${source:t}"
   local stamp="$(date +%Y%m%d-%H%M%S)"
   local stem="$name"
   local extension=""
-  if [[ "$name" == *.app || "$name" == *.plist || "$name" == *.savedState ]]; then
+  if [[ "$label" == "uygulama" ]]; then
+    stem="${name%.app}"
+    extension=".app.disabled"
+  elif [[ "$name" == *.plist || "$name" == *.savedState ]]; then
     stem="${name%.*}"
     extension=".${name##*.}"
   fi
@@ -53,11 +57,12 @@ move_to_trash() {
   local source="$1"
   local label="$2"
   [[ -e "$source" ]] || { print "Atlandı ($label bulunamadı): $source"; return 0; }
-  local destination="$(trash_destination "$source")"
+  local destination="$(trash_destination "$source" "$label")"
   if $DRY_RUN; then
     print "[dry-run] Çöp’e taşınacak ($label): $source -> $destination"
   else
     mv "$source" "$destination"
+    if [[ "$label" == "uygulama" ]]; then "$LSREGISTER" -u "$destination" 2>/dev/null || true; fi
     print "Çöp’e taşındı ($label): $destination"
   fi
 }

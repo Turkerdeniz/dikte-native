@@ -79,7 +79,7 @@ Varsayılan:
 ./scripts/uninstall.sh
 ```
 
-Bu akış uygulamayı kapatır, kendi bakım moduyla `SMAppService.mainApp.unregister()` çalıştırır, LaunchServices kaydını kaldırır ve `.app` bundle'ını Çöp'e taşır. Model, geçmiş, düzeltmeler ve ayarlar korunur.
+Bu akış uygulamayı kapatır, kendi bakım moduyla `SMAppService.mainApp.unregister()` çalıştırır ve LaunchServices kaydını kaldırır. Bundle, Çöp'te tekrar indekslenmemesi için `.app.disabled` uzantısıyla saklanır; geri almak için yalnız `.disabled` kısmı kaldırılabilir. Model, geçmiş, düzeltmeler ve ayarlar korunur.
 
 Tam yerel veri kaldırma:
 
@@ -96,6 +96,7 @@ Application Support, preferences, cache ve saved-state öğeleri benzersiz isiml
 ~/Library/Application Support/Dikte Native/
   Models/ggml-large-v3-turbo-q5_0.bin
   Models/ggml-large-v3-turbo-q5_0.bin.part
+  Models/model-verification.json
   history.json
   corrections.json
   active-session.json
