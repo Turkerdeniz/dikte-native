@@ -127,7 +127,7 @@ Beklenmedik kapanışta `active-session.json` bir sonraki açılışta History'y
 2. [Test kontrol listesini](TESTING.md) tamamla.
 3. `CHANGELOG.md` güncelle.
 4. Final commit'i oluştur.
-5. `v1.0.0-local` annotated tag oluştur.
+5. Sürümle eşleşen `vX.Y.Z-local` annotated tag'ini oluştur.
 6. Etiketlenmiş commit'ten yeniden build al.
 7. ZIP SHA-256 üret.
 8. Private GitHub Release'e ZIP ve `SHA256SUMS` ekle.

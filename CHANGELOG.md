@@ -2,6 +2,13 @@
 
 Bu dosya kullanıcıya ve bakım yapan geliştiriciye dönük önemli değişiklikleri özetler. Ayrıntılı teknik davranış için `docs/` belgelerine bak.
 
+## 1.0.1-local — 24 Ağustos 2026
+
+- Uygulama ikonu daha sade, yağmur mavisi ve gece laciverti bir tasarımla yenilendi.
+- Açık mavi mikrofon ile küçük sıcak turuncu kayıt göstergesi korunarak küçük Finder önizlemesindeki okunabilirlik artırıldı.
+- Görünür ikon yüzeyi tuvalin yaklaşık `%94`'üne çıkarıldı; kalın dış taşıyıcı çerçeve hissi azaltıldı.
+- 16–1024 piksel AppIcon çıktılarının tamamı gerçek alpha kanalıyla yeniden üretildi.
+
 ## 1.0.0-local — 24 Ağustos 2026
 
 ### Temel uygulama
