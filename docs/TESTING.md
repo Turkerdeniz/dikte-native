@@ -21,6 +21,7 @@ Build script aynı paketi release build'den önce otomatik çalıştırır. Test
 - memory-pressure actor köprüsü ve model bırakma politikası
 - crash breadcrumb içerik sınırı
 - kaldırma bakım komutu parser'ı
+- streaming model SHA-256 ve değiştirilmiş dosyayı reddeden verification receipt
 
 Gerçek 547 MB model yükleme testi:
 

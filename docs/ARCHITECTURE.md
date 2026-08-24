@@ -106,7 +106,7 @@ Whisper ilk kayıtta arka planda hazırlanabilir ve son kullanımdan 120 saniye 
 
 | Veri | Konum | İçerik |
 |---|---|---|
-| Model | `~/Library/Application Support/Dikte Native/Models/` | 547 MB Whisper modeli ve geçici `.part` |
+| Model | `~/Library/Application Support/Dikte Native/Models/` | 547 MB Whisper modeli, geçici `.part` ve doğrulama receipt'i |
 | Geçmiş | `.../Dikte Native/history.json` | Son 100 metin kaydı ve tanılar |
 | Düzeltmeler | `.../Dikte Native/corrections.json` | Yalnız kullanıcı onaylı eşleşmeler |
 | Crash breadcrumb | `.../Dikte Native/active-session.json` | Session ID, aşama, model/bellek baskısı; içerik yok |

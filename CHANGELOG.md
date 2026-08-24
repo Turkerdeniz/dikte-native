@@ -32,12 +32,13 @@ Bu dosya kullanıcıya ve bakım yapan geliştiriciye dönük önemli değişikl
 - Aktif işlem sırasında model unload erteleniyor; idle/preload durumunda güvenli biçimde bırakılıyor.
 - Crash breadcrumb yalnız session/aşama/model/bellek baskısı metadata'sı saklıyor.
 - Whisper dört thread'e sabitlendi; ses tamponları yeniden kullanılıyor ve waveform 20 FPS çalışıyor.
+- Model bütünlüğü sabit 4 MB streaming buffer ile doğrulanıyor; değişmeyen model sonraki açılışlarda atomik receipt üzerinden yeniden hash edilmeden kabul ediliyor.
 - Pipeline aşama süreleri, CPU, RAM, disk, thread ve thermal state History tanısına eklendi.
 
 ### Dağıtım ve bakım
 
 - Sabit `Dikte Native Local Signing` kimliği, strict code-sign, ARM64, entitlement ve VAD checksum kontrolleri eklendi.
-- Veriyi varsayılan olarak koruyan, LaunchServices/login item temizliği yapan geri alınabilir uninstall akışı eklendi.
+- Veriyi varsayılan olarak koruyan, LaunchServices/login item temizliği yapan geri alınabilir uninstall akışı eklendi; Çöp yedeği çift ikon üretmemesi için `.app.disabled` tutuluyor.
 - Kullanıcı, mimari, operasyon, test ve sorun giderme belgeleri oluşturuldu.
 
 ## Kaynak geçmişi notu

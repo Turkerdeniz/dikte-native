@@ -64,6 +64,7 @@ enum AppPaths {
     static let models = support.appendingPathComponent("Models", isDirectory: true)
     static let model = models.appendingPathComponent("ggml-large-v3-turbo-q5_0.bin")
     static let modelPart = models.appendingPathComponent("ggml-large-v3-turbo-q5_0.bin.part")
+    static let modelVerificationReceipt = models.appendingPathComponent("model-verification.json")
     static let historyFile = support.appendingPathComponent("history.json")
     static let codexRuntime = support.appendingPathComponent("CodexRuntime", isDirectory: true)
     static let correctionsFile = support.appendingPathComponent("corrections.json")
