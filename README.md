@@ -1,51 +1,118 @@
 # Dikte Native
 
-Apple Silicon için sıfırdan yazılmış, menü çubuğunda çalışan yerel macOS dikte uygulaması.
+Dikte Native, Türker'in Apple Silicon MacBook'u için yazılmış yerel bir macOS dikte uygulamasıdır. Menü çubuğunda çalışır, varsayılan olarak `⌥D` ile açılıp kapanır ve sistemin giriş aygıtını değiştirmeden yalnız MacBook'un yerleşik mikrofonunu kullanır.
 
-## Akış
+```text
+⌥D → MacBook mikrofonu → Silero VAD → yerel Whisper → temizlik → pano/yapıştırma
+                                                     └─ kayıt >30 sn ise Codex
+```
 
-`⌥D → MacBook mikrofonu → yerel whisper.cpp → yerel temizlik → panoya kopyala/yapıştır`
+## Günlük kullanım
 
-Kayıt süresi ayarlanan eşikten **kesin olarak uzunsa** (varsayılan `>30.0 sn`) temizlenmiş metin, yeni pencere açmadan aynı kalıcı Codex konuşmasına gönderilir. Codex bulunamazsa, iptal olursa veya hata verirse yerel metin korunur.
+1. Menü çubuğunda Dikte'nin açık olduğunu doğrula.
+2. `⌥D` tuşlarına bas. Gösterge önce **Mikrofon hazırlanıyor**, ilk gerçek ses paketi geldikten sonra **Dinliyorum** durumuna geçer.
+3. Konuş. Dalga yalnız mikrofondan ölçülen gerçek ses seviyesiyle hareket eder.
+4. Kaydı bitirmek için tekrar `⌥D` kullan.
+5. Sonuç panoya kopyalanır. Accessibility izni varsa daha önce odakta olan uygulamaya otomatik yapıştırılır.
 
-## Teknik sınırlar
+Kısayol Ayarlar'dan değiştirilebilir. Yeni kombinasyon kaydedilemezse eski çalışan kısayol korunur.
 
-- macOS 15+, yalnız ARM64
-- Swift 6, SwiftUI/AppKit, AVCapture + AVAudioConverter
-- Resmî `whisper.cpp v1.9.2` XCFramework (manifestte URL + checksum sabit)
-- Model: `ggml-large-v3-turbo-q5_0.bin`, resmî Hugging Face kaynağı + SHA-256 doğrulama
-- Python, Qt, Homebrew, ffmpeg, whisper-server, event tap ve LaunchAgent yok
-- Accessibility yalnız otomatik `Cmd+V` için kullanılır
-- Ses diske yazılmaz; geçmiş en fazla 100 metin kaydıdır
-- Eksik veya olağan dışı kısa Whisper parçaları aynı Turbo modelinde özgün zaman aralığıyla yeniden çözülür
-- Kayıt göstergesi varsayılan olarak sol altta kompakt çalışır; eski geniş üst görünüm Ayarlar'dan seçilebilir
-- Tek Turbo modeli son kullanımdan 120 saniye sonra veya bellek baskısında bırakılır
+## Kısa ve uzun kayıt ayrımı
 
-## Kayıt güvenilirliği
+- Kayıt süresi `≤30.0 saniye`: tamamı yerel olarak işlenir.
+- Kayıt süresi `>30.0 saniye`: temizlenen metin, aynı kalıcı Codex konuşmasına gönderilir.
+- Codex eşiği `0`: otomatik Codex yönlendirmesi kapalıdır.
 
-Dikte yalnız MacBook’un yerleşik mikrofonunu cihaz kimliğiyle seçer ve sistemin varsayılan girişini değiştirmez. İlk gerçek ses paketi gelmeden kayıt başlamış sayılmaz. Paket gelmezse oturum bir kez yeniden kurulur; hata sürerse cihaz formatı ve paket sayısı History içinde tanı olarak saklanır.
+Karar VAD'ın bulduğu konuşma süresine değil, gerçek kayıt süresine göre verilir. Codex bulunamazsa, iptal edilirse veya hata verirse yerel metin kaybolmaz.
 
-General ekranındaki **5 sn test et** düğmesi transkripsiyon yapmadan gerçek mikrofon paketlerini ve seviyesini doğrular.
+## İlk kurulum
 
-Her Whisper parçası ayrı doğrulanır. Bir parça boş dönerse aynı Turbo modeliyle yeniden denenir ve gerekirse bütün kayıt fallback'i çalışır. Eksiklik kurtarılamazsa kısmi metin otomatik yapıştırılmaz; panoda ve History'de korunur.
+Gereksinimler:
 
-## Build ve kurulum
+- Apple Silicon Mac
+- macOS 15 veya sonrası
+- Xcode/Swift 6 toolchain
+- Yerel build için Login Keychain erişimi
 
-İlk kez sabit yerel imzalama kimliğini oluştur:
+İlk kez sabit yerel imzalama kimliğini kur:
 
 ```sh
 ./scripts/setup-signing.sh
 ```
 
-Ardından:
+Ardından test, release build ve kurulum:
 
 ```sh
 ./scripts/build.sh
 ./scripts/install.sh
 ```
 
-Build, `Dikte Native Local Signing` kimliği bulunmazsa durur; ad-hoc imzaya düşmez. İmzalı uygulama, Desktop File Provider metadata’sından korunmak için `build/Dikte.app.zip` olarak üretilir; kurulum betiği bunu `/Applications/Dikte.app` konumuna açar.
+Build, `Dikte Native Local Signing` kimliği bulunmazsa durur; ad-hoc imzaya düşmez. Paket `build/Dikte.app.zip` olarak üretilir ve kurulum betiği strict imza doğrulamasından sonra `/Applications/Dikte.app` konumuna açar.
+
+## Model
+
+Yerel transkripsiyon modeli `ggml-large-v3-turbo-q5_0.bin` dosyasıdır:
+
+- Beklenen boyut: `574041195` byte
+- SHA-256: `394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2`
+- Kaynak: resmî `ggerganov/whisper.cpp` Hugging Face deposu
+
+Model Git deposuna veya uygulama paketine eklenmez. Kullanıcının açık eylemiyle indirilir, `.part` dosyasında doğrulanır ve sonra Application Support'a atomik olarak taşınır. Silero VAD modeli ise küçük ve checksum'u sabitlenmiş bir uygulama kaynağıdır.
+
+## İzinler
+
+| İzin | Neden gerekli? | Olmazsa ne olur? |
+|---|---|---|
+| Mikrofon | Yerleşik MacBook mikrofonundan kayıt | Kayıt başlamaz; General ekranı ilgili Sistem Ayarları sayfasını açar. |
+| Accessibility | `Cmd+V` olayını odaktaki uygulamaya göndermek | Transkripsiyon ve panoya kopyalama çalışır, yalnız otomatik yapıştırma yapılmaz. |
+| Bildirim | Kısa durum ve fallback bilgisi göstermek | Ana işlev çalışır; sistem bildirimi görünmez. |
+
+Global `⌥D` kısayolu Carbon `RegisterEventHotKey` kullandığı için Accessibility izni istemez. Mikrofon/F5 consumer tuşu desteklenmez.
+
+## Veri ve gizlilik
+
+- Ham ses yalnız bellekte tutulur ve normal kullanımda diske yazılmaz.
+- Son 100 metin kaydı `history.json` içinde yerel olarak saklanır.
+- Kullanıcının açıkça onayladığı düzeltmeler `corrections.json` içinde saklanır.
+- `>30 saniye` kayıtların yalnız temizlenmiş metni Codex'e gönderilir; ham ses gönderilmez.
+- Codex read-only sandbox, `approval_policy=never` ve boş uygulama runtime diziniyle çalışır.
+- Bu build Developer ID ile notarize edilmiş genel dağıtım değildir; Türker'in mevcut Mac'i için yerel imzalıdır.
+
+## Güvenilirlik davranışı
+
+- İlk mikrofon paketi 1,5 saniye içinde gelmezse ses oturumu bir kez yeniden kurulur.
+- Silero VAD gerçek konuşma bölgelerini çıkarır ve uzun sessizlikleri Whisper'a taşımaz.
+- Her Whisper parçası ayrı doğrulanır. Boş, halüsinasyon olan veya konuşma süresine göre olağan dışı kısa parça aynı Turbo modeliyle özgün zaman aralığından yeniden çözülür.
+- Parça kurtarılamazsa bütün kayıt bir kez çözülür.
+- Sonuç hâlâ eksikse kısmi metin otomatik yapıştırılmaz; panoda ve History'de `incomplete` olarak korunur.
+- Whisper'ın “İzlediğiniz için teşekkür ederim” türü sessizlik halüsinasyonları filtrelenir.
+- Memory-pressure sırasında aktif işlem yarıda kesilmez; model güvenli aşamada bırakılır.
+
+## Kaldırma
+
+Varsayılan kaldırma model, geçmiş ve ayarları korur:
+
+```sh
+./scripts/uninstall.sh
+```
+
+Önce yapılacakları görmek veya bütün yerel veriyi kurtarılabilir biçimde Çöp'e taşımak için:
+
+```sh
+./scripts/uninstall.sh --dry-run
+./scripts/uninstall.sh --remove-data
+```
+
+Betik farklı bundle kimliğine sahip bir uygulamaya dokunmaz; login item ve LaunchServices kaydını uygulama taşınmadan önce kaldırır. Hiçbir mod `rm` ile kalıcı silme yapmaz.
+
+## Daha ayrıntılı belgeler
+
+- [Mimari](docs/ARCHITECTURE.md)
+- [Build, kurulum ve bakım](docs/OPERATIONS.md)
+- [Test ve release kontrolü](docs/TESTING.md)
+- [Sorun giderme](docs/TROUBLESHOOTING.md)
+- [Değişiklik geçmişi](CHANGELOG.md)
 
 ## Kaynak sınırı
 
-Bu proje `yusufipk/dikte` kaynak kodunu içermez veya kopyalamaz. Eski proje yalnız ürün davranışlarını anlamak için referans kabul edilmiştir.
+Bu proje `yusufipk/dikte` kaynak kodunu içermez veya kopyalamaz. Eski Linux/Python/Qt projesi yalnız ürün davranışlarını anlamak için referans kabul edilmiştir.
