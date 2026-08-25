@@ -17,6 +17,7 @@ Build script aynı paketi release build'den önce otomatik çalıştırır. Test
 - Türkçe ayar ve eski config migrasyonları
 - Codex JSON event/thread parser
 - Codex developer düzenleme sözleşmesi, JSON veri sınırı ve eski thread'in tek seferlik migrasyonu
+- tek kullanımlık Whisper tanı işareti, WAV süre/başlık doğrulaması, History bağlantısı ve güvenli tanı silme sınırı
 - overlay boyut/konum politikası
 - CPU/RAM/disk tanı snapshot'ı
 - memory-pressure actor köprüsü ve model bırakma politikası

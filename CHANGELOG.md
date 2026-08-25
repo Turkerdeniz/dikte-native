@@ -2,6 +2,14 @@
 
 Bu dosya kullanıcıya ve bakım yapan geliştiriciye dönük önemli değişiklikleri özetler. Ayrıntılı teknik davranış için `docs/` belgelerine bak.
 
+## 1.1.0-local aday — 25 Ağustos 2026
+
+- İsteğe bağlı, tek kullanımlık “Sonraki kaydı tanı için sakla” akışı eklendi.
+- Yalnız açıkça işaretlenen kayıt 16 kHz mono PCM WAV olarak; VAD bölgeleri, Whisper parça tanıları ve metin aşamalarıyla birlikte ayrı `Diagnostics` paketinde saklanıyor.
+- Tanı kaydı History kimliğine bağlanıyor; General ve History ekranlarından görüntülenebiliyor ve tanı verileri normal geçmiş/model dosyalarına dokunmadan silinebiliyor.
+- Mikrofon testi tanı işaretini tüketmiyor; normal kullanımda ham sesin diske yazılmaması davranışı korunuyor.
+- Bu sürüm aday build olarak üretildi; çalışan `/Applications/Dikte.app` kurulumu değiştirilmedi.
+
 ## 1.0.2-local — 25 Ağustos 2026
 
 - Codex çağrılarına yüksek öncelikli, uygulamaya ait bir sesli düşünce editörü sözleşmesi eklendi.

@@ -101,6 +101,7 @@ Application Support, preferences, cache ve saved-state öğeleri benzersiz isiml
   corrections.json
   active-session.json
   CodexRuntime/
+  Diagnostics/             # yalnız kullanıcı açıkça tek kayıtlık tanıyı seçerse
 ~/Library/Preferences/com.turkerdenizer.dikte.native.plist
 ~/Library/Caches/com.turkerdenizer.dikte.native/
 ```

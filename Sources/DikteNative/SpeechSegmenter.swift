@@ -19,6 +19,7 @@ struct SpeechChunk: Equatable, Sendable {
 
 struct SpeechSegmentation: Sendable {
     let chunks: [SpeechChunk]
+    let regions: [SpeechRegion]
     let segmentCount: Int
     let speechDuration: TimeInterval
 }
@@ -63,7 +64,7 @@ actor SpeechSegmenter {
         let merged = SpeechChunkBuilder.mergeOverlaps(regions)
         let duration = Double(merged.reduce(0) { $0 + ($1.endSample - $1.startSample) }) / Double(Self.sampleRate)
         return SpeechSegmentation(chunks: SpeechChunkBuilder.makeChunks(samples: samples, regions: merged),
-                                  segmentCount: count, speechDuration: duration)
+                                  regions: merged, segmentCount: count, speechDuration: duration)
     }
 
     func unload() {

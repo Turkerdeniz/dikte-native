@@ -45,8 +45,14 @@ private struct SectionCard<Content: View>: View {
 private struct GeneralSettingsView: View {
     @ObservedObject var model: AppModel
     @ObservedObject private var settings: AppSettings
+    @ObservedObject private var diagnosticStore: WhisperDiagnosticStore
     @State private var recordingHotKey = false
-    init(model: AppModel) { self.model = model; settings = model.settings }
+    @State private var confirmDeleteDiagnostics = false
+    init(model: AppModel) {
+        self.model = model
+        settings = model.settings
+        diagnosticStore = model.diagnosticStore
+    }
 
     var body: some View {
         ScrollView {
@@ -109,9 +115,56 @@ private struct GeneralSettingsView: View {
                     Picker("Overlay konumu", selection: $settings.overlayPosition) { ForEach(OverlayPosition.allCases) { Text($0.title).tag($0) } }
                     Toggle("Login’de başlat", isOn: Binding(get: { model.loginAtStartup }, set: { enabled in model.setLoginAtStartup(enabled) }))
                 }
+                SectionCard("Whisper tanısı") {
+                    Label(model.diagnosticCaptureArmed ? "Sonraki kayıt tanı için işaretlendi" : "Tanı kaydı kapalı",
+                          systemImage: model.diagnosticCaptureArmed ? "waveform.badge.mic" : "waveform.badge.minus")
+                        .foregroundStyle(model.diagnosticCaptureArmed ? .orange : .secondary)
+                    Text("Normal kullanımda ses diske yazılmaz. Bu işlem yalnız bir sonraki normal kaydın 16 kHz sesini ve Whisper tanısını geçici olarak saklar; mikrofon testi etkilenmez.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button(model.diagnosticCaptureArmed ? "Tanı kaydını iptal et" : "Sonraki kaydı tanı için sakla") {
+                        model.toggleDiagnosticCapture()
+                    }
+                    .disabled(model.phase != .idle)
+
+                    if !diagnosticStore.captures.isEmpty {
+                        Divider()
+                        Text("\(diagnosticStore.captures.count) tanı kaydı · \(formatDiagnosticBytes(diagnosticStore.totalAudioBytes))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        ForEach(diagnosticStore.captures.prefix(5)) { capture in
+                            DisclosureGroup {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("History: \(capture.historyEntryID.uuidString)")
+                                    Text("\(capture.sampleRate) Hz · \(capture.sampleCount) örnek · \(capture.vadRegions.count) VAD bölümü · \(capture.chunkDiagnostics.count) Whisper parçası")
+                                    if !capture.rawTranscript.isEmpty {
+                                        Text(capture.rawTranscript).lineLimit(3).textSelection(.enabled)
+                                    }
+                                    HStack {
+                                        Button("Finder’da göster") { model.revealDiagnosticCapture(id: capture.id) }
+                                        Button("Sil", role: .destructive) { model.deleteDiagnosticCapture(id: capture.id) }
+                                            .disabled(model.phase != .idle)
+                                    }
+                                }
+                                .font(.caption)
+                                .padding(.top, 6)
+                            } label: {
+                                Text("\(capture.createdAt.formatted(date: .abbreviated, time: .shortened)) · \(String(format: "%.1f sn", capture.duration))")
+                            }
+                        }
+                        Button("Tüm tanı kayıtlarını sil", role: .destructive) { confirmDeleteDiagnostics = true }
+                            .disabled(model.phase != .idle)
+                    }
+                }
             }.padding(20)
         }
         .sheet(isPresented: $recordingHotKey) { HotKeyCaptureSheet(model: model, isPresented: $recordingHotKey) }
+        .confirmationDialog("Tüm geçici Whisper tanı kayıtları silinsin mi?", isPresented: $confirmDeleteDiagnostics) {
+            Button("Tümünü sil", role: .destructive) { model.deleteAllDiagnosticCaptures() }
+            Button("Vazgeç", role: .cancel) { }
+        } message: {
+            Text("History, model ve normal uygulama verileri korunur.")
+        }
     }
 
     private var microphonePermissionTitle: String {
@@ -122,6 +175,10 @@ private struct GeneralSettingsView: View {
         case .restricted: "Mikrofon erişimi kısıtlı"
         @unknown default: "Mikrofon izni bilinmiyor"
         }
+    }
+
+    private func formatDiagnosticBytes(_ value: Int) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(value), countStyle: .file)
     }
 }
 
@@ -228,9 +285,14 @@ private struct CodexSettingsView: View {
 private struct HistoryView: View {
     @ObservedObject var model: AppModel
     @ObservedObject private var store: HistoryStore
+    @ObservedObject private var diagnosticStore: WhisperDiagnosticStore
     @State private var selection: UUID?
     @State private var editingEntry: HistoryEntry?
-    init(model: AppModel) { self.model = model; store = model.history }
+    init(model: AppModel) {
+        self.model = model
+        store = model.history
+        diagnosticStore = model.diagnosticStore
+    }
     var body: some View {
         HSplitView {
             VStack(spacing: 0) {
@@ -250,6 +312,16 @@ private struct HistoryView: View {
                             Button("Panoya kopyala") { model.copy(entry.finalText) }
                             if entry.mode != .recordingError { Button("Düzelt ve öğret") { editingEntry = entry } }
                             Button("Kaydı sil", role: .destructive) { store.delete(id: entry.id); selection = nil }
+                        }
+                        if let diagnosticID = entry.diagnosticCaptureID {
+                            if diagnosticStore.captures.contains(where: { $0.id == diagnosticID }) {
+                                Label("Geçici Whisper tanı kaydı bağlı", systemImage: "waveform.badge.mic")
+                                    .font(.caption).foregroundStyle(.orange)
+                                Button("Tanı klasörünü göster") { model.revealDiagnosticCapture(id: diagnosticID) }
+                            } else {
+                                Label("Bağlı tanı kaydı silinmiş", systemImage: "waveform.badge.minus")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
                         }
                         if entry.mode != .recordingError {
                             Divider(); Text("Whisper’ın duyduğu").font(.headline); Text(entry.rawTranscript).textSelection(.enabled)

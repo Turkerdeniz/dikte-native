@@ -72,6 +72,7 @@ Global `⌥D` kısayolu Carbon `RegisterEventHotKey` kullandığı için Accessi
 ## Veri ve gizlilik
 
 - Ham ses yalnız bellekte tutulur ve normal kullanımda diske yazılmaz.
+- Kullanıcı “Sonraki kaydı tanı için sakla” işlemini açıkça seçerse yalnız o kayıt 16 kHz WAV ve Whisper metadata paketi olarak `Diagnostics/` altında geçici saklanır; işaret tek kayıttan sonra kapanır.
 - Son 100 metin kaydı `history.json` içinde yerel olarak saklanır.
 - Kullanıcının açıkça onayladığı düzeltmeler `corrections.json` içinde saklanır.
 - `>30 saniye` kayıtların yalnız temizlenmiş metni Codex'e gönderilir; ham ses gönderilmez.

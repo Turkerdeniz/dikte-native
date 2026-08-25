@@ -38,7 +38,8 @@ final class HistoryStore: ObservableObject {
                                       codexResponse: old.codexResponse, codexError: old.codexError,
                                       audioDiagnostics: old.audioDiagnostics,
                                       chunkDiagnostics: old.chunkDiagnostics,
-                                      performanceDiagnostics: old.performanceDiagnostics)
+                                      performanceDiagnostics: old.performanceDiagnostics,
+                                      diagnosticCaptureID: old.diagnosticCaptureID)
         persist()
     }
 
@@ -69,4 +70,5 @@ enum AppPaths {
     static let codexRuntime = support.appendingPathComponent("CodexRuntime", isDirectory: true)
     static let correctionsFile = support.appendingPathComponent("corrections.json")
     static let crashBreadcrumbFile = support.appendingPathComponent("active-session.json")
+    static let whisperDiagnostics = support.appendingPathComponent("Diagnostics", isDirectory: true)
 }

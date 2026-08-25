@@ -115,6 +115,8 @@ Whisper ilk kayıtta arka planda hazırlanabilir. Tek sahibi AppModel olan idle 
 | Düzeltmeler | `.../Dikte Native/corrections.json` | Yalnız kullanıcı onaylı eşleşmeler |
 | Crash breadcrumb | `.../Dikte Native/active-session.json` | Session ID, aşama, model/bellek baskısı; içerik yok |
 | Codex runtime | `.../Dikte Native/CodexRuntime/` | Uygulamaya özel geçici çalışma dizini |
+| Whisper tanısı | `.../Dikte Native/Diagnostics/<capture-id>/` | Yalnız açık tek-kayıt işaretinde 16 kHz WAV ve History bağlantılı metadata |
 | Ayarlar | macOS UserDefaults | Dil, kısayol, eşik, thread ID ve görünüm tercihleri |
 
 History atomik Codable JSON olarak yazılır ve 100 kayıtla sınırlandırılır.
+Tanı bayrağı kalıcı ayar değildir: mikrofon testi tarafından tüketilmez, ilk başlayan normal kayıtta tüketilir ve uygulama yeniden açıldığında kapalıdır. Metadata gerçek süreyi, ses tanısını, VAD bölgelerini, Whisper parçalarını ve ham/temiz/nihai metni taşır. Normal kayıt hattı tanı kapalıyken dosya veya klasör oluşturmaz.

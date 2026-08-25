@@ -21,12 +21,14 @@ final class AppModel: ObservableObject {
     @Published private(set) var audioLevels = [Float](repeating: 0, count: 34)
     @Published private(set) var lastAudioDiagnostics: AudioDiagnostics?
     @Published private(set) var isMicrophoneTest = false
+    @Published private(set) var diagnosticCaptureArmed = false
 
     let settings = AppSettings()
     let history = HistoryStore()
     let modelStore = ModelStore()
     let vadModelStore = VADModelStore()
     let corrections = CorrectionStore()
+    let diagnosticStore = WhisperDiagnosticStore()
     let recorder = AudioRecorder()
     let pasteService = PasteService()
     private let hotKey = HotKeyManager()
@@ -44,6 +46,8 @@ final class AppModel: ObservableObject {
     private let modelIdleReleaseScheduler = ModelIdleReleaseScheduler()
     private var memoryPressureLevel: MemoryPressureLevel = .normal
     private var pendingMemoryRelease = false
+    private var activeDiagnosticCapture = false
+    private var diagnosticCaptureArm = OneShotDiagnosticCaptureArm()
     private let breadcrumbStore = CrashBreadcrumbStore()
     private let overlay = OverlayController()
     private static let lifecycleLog = Logger(subsystem: "com.turkerdenizer.dikte.native", category: "Lifecycle")
@@ -104,6 +108,8 @@ final class AppModel: ObservableObject {
             phase = .arming(startedAt: startedAt, attempt: 1)
             overlay.show(model: self)
             try await beginCapture(restarting: false)
+            activeDiagnosticCapture = diagnosticCaptureArm.consume(isMicrophoneTest: isMicrophoneTest)
+            diagnosticCaptureArmed = diagnosticCaptureArm.isArmed
             scheduleArmingTimeout(startedAt: startedAt, attempt: 1)
             maximumRecordingTask?.cancel()
             maximumRecordingTask = Task { [weak self] in
@@ -131,7 +137,7 @@ final class AppModel: ObservableObject {
             guard let self else { return }
             let recording = await recorder.stop()
             guard !recording.samples.isEmpty else {
-                recordCaptureFailure(recording, message: "\(recording.deviceName) seçildi fakat mikrofon 0 ses paketi üretti.")
+                await recordCaptureFailure(recording, message: "\(recording.deviceName) seçildi fakat mikrofon 0 ses paketi üretti.")
                 return
             }
             if isMicrophoneTest {
@@ -205,6 +211,20 @@ final class AppModel: ObservableObject {
     func resetCodexConversation() { settings.codexThreadID = nil; pasteService.notify("Yeni Codex konuşması", "Bir sonraki uzun kayıt yeni bir konuşma başlatacak.") }
     func copyLastResult() { if let lastResult { _ = pasteService.copyAndOptionallyPaste(lastResult, shouldPaste: false) } }
     func copy(_ text: String) { _ = pasteService.copyAndOptionallyPaste(text, shouldPaste: false) }
+    func toggleDiagnosticCapture() {
+        guard phase == .idle else { return }
+        diagnosticCaptureArm.toggle()
+        diagnosticCaptureArmed = diagnosticCaptureArm.isArmed
+        let message = diagnosticCaptureArmed
+            ? "Yalnız bir sonraki normal kayıt geçici tanı verisiyle saklanacak."
+            : "Tanı kaydı iptal edildi."
+        pasteService.notify("Whisper tanısı", message)
+    }
+    func revealDiagnosticCapture(id: UUID) {
+        NSWorkspace.shared.activateFileViewerSelecting([diagnosticStore.audioURL(for: id)])
+    }
+    func deleteDiagnosticCapture(id: UUID) { Task { await diagnosticStore.delete(id: id) } }
+    func deleteAllDiagnosticCaptures() { Task { await diagnosticStore.deleteAll() } }
 
     private func installHotKey(_ configuration: HotKeyConfiguration) throws {
         try hotKey.register(configuration) { [weak self] in self?.toggleRecording() }
@@ -213,6 +233,7 @@ final class AppModel: ObservableObject {
     private func process(recording: AudioCapture) async {
         var diagnostics = recording.diagnostics
         var chunkDiagnostics: [ChunkTranscriptionDiagnostic] = []
+        var vadRegions: [SpeechRegion] = []
         do {
             performanceTracker?.begin("Ses hazırlama")
             setStage(.preparingAudio)
@@ -232,6 +253,7 @@ final class AppModel: ObservableObject {
                 diagnostics.vadSegmentCount = segmentation.segmentCount
                 diagnostics.transcriptionChunkCount = segmentation.chunks.count
                 diagnostics.vadSpeechDuration = segmentation.speechDuration
+                vadRegions = segmentation.regions
                 if segmentation.chunks.isEmpty {
                     guard !prepared.samples.isEmpty, prepared.voicedDuration >= 0.20 else {
                         throw DikteError.noSpeech
@@ -346,8 +368,8 @@ final class AppModel: ObservableObject {
                 throw DikteError.noSpeech
             }
             if hasUnresolvedChunk {
-                finishIncomplete(recording, partialText: raw, diagnostics: diagnostics,
-                                 chunkDiagnostics: chunkDiagnostics)
+                await finishIncomplete(recording, partialText: raw, diagnostics: diagnostics,
+                                       vadRegions: vadRegions, chunkDiagnostics: chunkDiagnostics)
                 return
             }
 
@@ -384,21 +406,31 @@ final class AppModel: ObservableObject {
             let performance = performanceTracker?.finish()
             let wordsPerSecond = Double(raw.split(whereSeparator: \Character.isWhitespace).count) / max(0.001, detectedSpeechDuration)
             let charactersPerSecond = Double(raw.filter { !$0.isWhitespace }.count) / max(0.001, detectedSpeechDuration)
-            history.add(HistoryEntry(duration: recording.duration, mode: useCodex ? .autoAsk : .dictation,
+            let historyID = UUID()
+            let mode: HistoryMode = useCodex ? .autoAsk : .dictation
+            let diagnosticID = await persistDiagnosticIfNeeded(
+                recording: recording, historyEntryID: historyID, mode: mode,
+                diagnostics: diagnostics, vadRegions: vadRegions, chunkDiagnostics: chunkDiagnostics,
+                rawTranscript: raw, deterministicText: cleaned, finalText: final
+            )
+            history.add(HistoryEntry(id: historyID, duration: recording.duration, mode: mode,
                                      rawTranscript: raw, finalText: final, deterministicText: cleaned,
                                      localCorrectedText: nil, primaryConfidence: selected.meanTokenProbability,
                                      lowConfidenceTokenRatio: selected.lowConfidenceTokenRatio,
                                      wordsPerSecond: wordsPerSecond, charactersPerSecond: charactersPerSecond,
                                      codexResponse: response, codexError: codexError,
                                      audioDiagnostics: diagnostics, chunkDiagnostics: chunkDiagnostics,
-                                     performanceDiagnostics: performance))
+                                     performanceDiagnostics: performance,
+                                     diagnosticCaptureID: diagnosticID))
             returnToIdle()
         } catch is CancellationError {
             returnToIdle()
         } catch DikteError.noSpeech {
-            finishWithoutSpeech(recording, diagnostics: diagnostics)
+            await finishWithoutSpeech(recording, diagnostics: diagnostics, vadRegions: vadRegions)
         } catch {
-            recordCaptureFailure(recording, message: error.localizedDescription, diagnostics: diagnostics)
+            await recordCaptureFailure(recording, message: error.localizedDescription,
+                                       diagnostics: diagnostics, vadRegions: vadRegions,
+                                       chunkDiagnostics: chunkDiagnostics)
         }
     }
 
@@ -440,57 +472,107 @@ final class AppModel: ObservableObject {
                     self.scheduleArmingTimeout(startedAt: startedAt, attempt: 2)
                 } catch {
                     let capture = await self.recorder.stop()
-                    self.recordCaptureFailure(capture, message: error.localizedDescription)
+                    await self.recordCaptureFailure(capture, message: error.localizedDescription)
                 }
             } else {
                 let capture = await self.recorder.stop()
-                self.recordCaptureFailure(capture, message: "MacBook mikrofonu iki denemede de ses paketi üretmedi.")
+                await self.recordCaptureFailure(capture, message: "MacBook mikrofonu iki denemede de ses paketi üretmedi.")
             }
         }
     }
 
-    private func recordCaptureFailure(_ capture: AudioCapture, message: String, diagnostics: AudioDiagnostics? = nil) {
+    private func recordCaptureFailure(_ capture: AudioCapture, message: String,
+                                      diagnostics: AudioDiagnostics? = nil,
+                                      vadRegions: [SpeechRegion] = [],
+                                      chunkDiagnostics: [ChunkTranscriptionDiagnostic] = []) async {
         let effectiveDiagnostics = diagnostics ?? capture.diagnostics
         let detail = effectiveDiagnostics.summary
         lastAudioDiagnostics = effectiveDiagnostics
         isMicrophoneTest = false
-        history.add(HistoryEntry(duration: capture.duration, mode: .recordingError,
+        let historyID = UUID()
+        let diagnosticID = await persistDiagnosticIfNeeded(
+            recording: capture, historyEntryID: historyID, mode: .recordingError,
+            diagnostics: effectiveDiagnostics, vadRegions: vadRegions,
+            chunkDiagnostics: chunkDiagnostics, rawTranscript: "",
+            deterministicText: nil, finalText: message
+        )
+        history.add(HistoryEntry(id: historyID, duration: capture.duration, mode: .recordingError,
                                  rawTranscript: "", finalText: message,
                                  deterministicText: nil, localCorrectedText: nil,
                                  audioDiagnostics: effectiveDiagnostics,
-                                 performanceDiagnostics: performanceTracker?.finish()))
+                                 performanceDiagnostics: performanceTracker?.finish(),
+                                 diagnosticCaptureID: diagnosticID))
         alertMessage = detail.isEmpty ? message : "\(message)\n\n\(detail)"
         returnToIdle()
     }
 
-    private func finishWithoutSpeech(_ capture: AudioCapture, diagnostics: AudioDiagnostics) {
+    private func finishWithoutSpeech(_ capture: AudioCapture, diagnostics: AudioDiagnostics,
+                                     vadRegions: [SpeechRegion]) async {
         lastAudioDiagnostics = diagnostics
         isMicrophoneTest = false
-        history.add(HistoryEntry(duration: capture.duration, mode: .recordingError,
+        let historyID = UUID()
+        let diagnosticID = await persistDiagnosticIfNeeded(
+            recording: capture, historyEntryID: historyID, mode: .recordingError,
+            diagnostics: diagnostics, vadRegions: vadRegions, chunkDiagnostics: [],
+            rawTranscript: "", deterministicText: nil, finalText: "Ses yok."
+        )
+        history.add(HistoryEntry(id: historyID, duration: capture.duration, mode: .recordingError,
                                  rawTranscript: "", finalText: "Ses yok.",
                                  deterministicText: nil, localCorrectedText: nil,
                                  audioDiagnostics: diagnostics,
-                                 performanceDiagnostics: performanceTracker?.finish()))
+                                 performanceDiagnostics: performanceTracker?.finish(),
+                                 diagnosticCaptureID: diagnosticID))
         pasteService.notify("Dikte", "Ses yok.")
         returnToIdle()
     }
 
     private func finishIncomplete(_ capture: AudioCapture, partialText: String,
                                   diagnostics: AudioDiagnostics,
-                                  chunkDiagnostics: [ChunkTranscriptionDiagnostic]) {
+                                  vadRegions: [SpeechRegion],
+                                  chunkDiagnostics: [ChunkTranscriptionDiagnostic]) async {
         let cleaned = TextCleaner.clean(partialText)
         if !cleaned.isEmpty {
             lastResult = cleaned
             _ = pasteService.copyAndOptionallyPaste(cleaned, shouldPaste: false)
         }
         let performance = performanceTracker?.finish()
-        history.add(HistoryEntry(duration: capture.duration, mode: .incomplete,
+        let historyID = UUID()
+        let diagnosticID = await persistDiagnosticIfNeeded(
+            recording: capture, historyEntryID: historyID, mode: .incomplete,
+            diagnostics: diagnostics, vadRegions: vadRegions,
+            chunkDiagnostics: chunkDiagnostics, rawTranscript: partialText,
+            deterministicText: cleaned, finalText: cleaned
+        )
+        history.add(HistoryEntry(id: historyID, duration: capture.duration, mode: .incomplete,
                                  rawTranscript: partialText, finalText: cleaned,
                                  deterministicText: cleaned, localCorrectedText: nil,
                                  audioDiagnostics: diagnostics, chunkDiagnostics: chunkDiagnostics,
-                                 performanceDiagnostics: performance))
+                                 performanceDiagnostics: performance,
+                                 diagnosticCaptureID: diagnosticID))
         pasteService.notify("Dikte", "Bir konuşma bölümü çözülemedi; bulunan metin panoda.")
         returnToIdle()
+    }
+
+    private func persistDiagnosticIfNeeded(
+        recording: AudioCapture, historyEntryID: UUID, mode: HistoryMode,
+        diagnostics: AudioDiagnostics, vadRegions: [SpeechRegion],
+        chunkDiagnostics: [ChunkTranscriptionDiagnostic], rawTranscript: String,
+        deterministicText: String?, finalText: String
+    ) async -> UUID? {
+        guard activeDiagnosticCapture else { return nil }
+        do {
+            let id = try await diagnosticStore.save(
+                recording: recording, historyEntryID: historyEntryID, mode: mode,
+                audioDiagnostics: diagnostics, vadRegions: vadRegions,
+                chunkDiagnostics: chunkDiagnostics, rawTranscript: rawTranscript,
+                deterministicText: deterministicText, finalText: finalText
+            )
+            pasteService.notify("Whisper tanısı kaydedildi", "Ses ve tanı verileri geçici Diagnostics klasörüne yazıldı.")
+            return id
+        } catch {
+            pasteService.notify("Whisper tanısı kaydedilemedi", error.localizedDescription)
+            return nil
+        }
     }
 
     private func aggregateTranscripts(_ parts: [WhisperTranscript]) -> WhisperTranscript {
@@ -599,6 +681,7 @@ final class AppModel: ObservableObject {
         maximumRecordingTask?.cancel()
         performanceTracker = nil
         processingTask = nil
+        activeDiagnosticCapture = false
         phase = .idle
         overlay.hide()
         breadcrumbStore.clear()

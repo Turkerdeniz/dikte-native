@@ -41,6 +41,10 @@ private struct DikteMenu: View {
         Button("Copy Last Result") { model.copyLastResult() }.disabled(model.lastResult == nil)
         Button("New Codex Conversation") { model.resetCodexConversation() }
         Divider()
+        Button(model.diagnosticCaptureArmed ? "Cancel Next Diagnostic Capture" : "Save Next Recording for Diagnosis") {
+            model.toggleDiagnosticCapture()
+        }.disabled(model.phase != .idle)
+        Divider()
         Button("Settings…") { showSettings() }
         Button("Quit") { model.shutdown(); NSApplication.shared.terminate(nil) }
     }

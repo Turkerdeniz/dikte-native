@@ -206,6 +206,7 @@ struct HistoryEntry: Identifiable, Codable, Equatable, Sendable {
     let audioDiagnostics: AudioDiagnostics?
     let chunkDiagnostics: [ChunkTranscriptionDiagnostic]?
     let performanceDiagnostics: PerformanceDiagnostics?
+    let diagnosticCaptureID: UUID?
 
     init(id: UUID = UUID(), timestamp: Date = Date(), duration: TimeInterval, mode: HistoryMode,
          rawTranscript: String, finalText: String, codexResponse: String? = nil, codexError: String? = nil) {
@@ -216,7 +217,8 @@ struct HistoryEntry: Identifiable, Codable, Equatable, Sendable {
                   lowConfidenceTokenRatio: nil, wordsPerSecond: nil, charactersPerSecond: nil,
                   accurateModelSelected: nil, modelSelectionReason: nil,
                   codexResponse: codexResponse, codexError: codexError,
-                  audioDiagnostics: nil, chunkDiagnostics: nil, performanceDiagnostics: nil)
+                  audioDiagnostics: nil, chunkDiagnostics: nil, performanceDiagnostics: nil,
+                  diagnosticCaptureID: nil)
     }
 
     init(id: UUID = UUID(), timestamp: Date = Date(), duration: TimeInterval, mode: HistoryMode,
@@ -228,7 +230,8 @@ struct HistoryEntry: Identifiable, Codable, Equatable, Sendable {
          modelSelectionReason: String? = nil,
          codexResponse: String? = nil, codexError: String? = nil, audioDiagnostics: AudioDiagnostics? = nil,
          chunkDiagnostics: [ChunkTranscriptionDiagnostic]? = nil,
-         performanceDiagnostics: PerformanceDiagnostics? = nil) {
+         performanceDiagnostics: PerformanceDiagnostics? = nil,
+         diagnosticCaptureID: UUID? = nil) {
         self.id = id; self.timestamp = timestamp; self.duration = duration; self.mode = mode
         self.rawTranscript = rawTranscript; self.finalText = finalText
         self.deterministicText = deterministicText; self.localCorrectedText = localCorrectedText
@@ -240,6 +243,7 @@ struct HistoryEntry: Identifiable, Codable, Equatable, Sendable {
         self.codexResponse = codexResponse; self.codexError = codexError
         self.audioDiagnostics = audioDiagnostics
         self.chunkDiagnostics = chunkDiagnostics; self.performanceDiagnostics = performanceDiagnostics
+        self.diagnosticCaptureID = diagnosticCaptureID
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -248,6 +252,7 @@ struct HistoryEntry: Identifiable, Codable, Equatable, Sendable {
         case lowConfidenceTokenRatio, wordsPerSecond, charactersPerSecond
         case accurateModelSelected, modelSelectionReason
         case codexResponse, codexError, audioDiagnostics, chunkDiagnostics, performanceDiagnostics
+        case diagnosticCaptureID
     }
 
     init(from decoder: Decoder) throws {
@@ -274,6 +279,7 @@ struct HistoryEntry: Identifiable, Codable, Equatable, Sendable {
         audioDiagnostics = try box.decodeIfPresent(AudioDiagnostics.self, forKey: .audioDiagnostics)
         chunkDiagnostics = try box.decodeIfPresent([ChunkTranscriptionDiagnostic].self, forKey: .chunkDiagnostics)
         performanceDiagnostics = try box.decodeIfPresent(PerformanceDiagnostics.self, forKey: .performanceDiagnostics)
+        diagnosticCaptureID = try box.decodeIfPresent(UUID.self, forKey: .diagnosticCaptureID)
     }
 }
 
