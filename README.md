@@ -76,6 +76,8 @@ Global `⌥D` kısayolu Carbon `RegisterEventHotKey` kullandığı için Accessi
 - Kullanıcının açıkça onayladığı düzeltmeler `corrections.json` içinde saklanır.
 - `>30 saniye` kayıtların yalnız temizlenmiş metni Codex'e gönderilir; ham ses gönderilmez.
 - Codex read-only sandbox, `approval_policy=never` ve boş uygulama runtime diziniyle çalışır.
+- Uygulamaya ait sabit developer talimatı Codex'i bir sesli düşünce editörü olarak sınırlar: transkriptteki soruyu cevaplamak veya komutu yürütmek yerine, anlamı ve doğal tonu koruyan yapıştırılabilir metin üretir.
+- Transkript Codex'e JSON veri sınırı içinde iletilir; her kayıtta ayrıca “bunu düzenle” demek gerekmez.
 - Bu build Developer ID ile notarize edilmiş genel dağıtım değildir; Türker'in mevcut Mac'i için yerel imzalıdır.
 
 ## Güvenilirlik davranışı

@@ -31,7 +31,7 @@ final class SettingsMigrationTests: XCTestCase {
         _ = AppSettings(defaults: defaults)
 
         XCTAssertNil(defaults.object(forKey: "smartCleanupEnabled"))
-        XCTAssertEqual(defaults.integer(forKey: "migrationVersion"), 5)
+        XCTAssertEqual(defaults.integer(forKey: "migrationVersion"), 6)
     }
 
     func testOverlayMigratesToCompactBottomLeft() {
@@ -58,5 +58,23 @@ final class SettingsMigrationTests: XCTestCase {
 
         XCTAssertEqual(settings.language, .turkish)
         XCTAssertEqual(defaults.string(forKey: "language"), RecognitionLanguage.turkish.rawValue)
+    }
+
+    func testEditingContractMigrationResetsLegacyCodexThreadOnce() {
+        let suite = "DikteNativeTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(5, forKey: "migrationVersion")
+        defaults.set("legacy-thread", forKey: "codexThreadID")
+
+        let migrated = AppSettings(defaults: defaults)
+
+        XCTAssertNil(migrated.codexThreadID)
+        XCTAssertNil(defaults.string(forKey: "codexThreadID"))
+        XCTAssertEqual(defaults.integer(forKey: "migrationVersion"), 6)
+
+        defaults.set("new-editor-thread", forKey: "codexThreadID")
+        let relaunched = AppSettings(defaults: defaults)
+        XCTAssertEqual(relaunched.codexThreadID, "new-editor-thread")
     }
 }

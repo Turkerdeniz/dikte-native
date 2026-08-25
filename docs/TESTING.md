@@ -16,6 +16,7 @@ Build script aynı paketi release build'den önce otomatik çalıştırır. Test
 - eksik parça/bütün kayıt fallback kararları
 - Türkçe ayar ve eski config migrasyonları
 - Codex JSON event/thread parser
+- Codex developer düzenleme sözleşmesi, JSON veri sınırı ve eski thread'in tek seferlik migrasyonu
 - overlay boyut/konum politikası
 - CPU/RAM/disk tanı snapshot'ı
 - memory-pressure actor köprüsü ve model bırakma politikası

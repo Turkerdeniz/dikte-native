@@ -204,6 +204,11 @@ private struct CodexSettingsView: View {
                 Label(CodexClient.executableURL() == nil ? "Codex bulunamadı" : "Codex hazır", systemImage: CodexClient.executableURL() == nil ? "xmark.circle" : "checkmark.circle.fill")
                     .foregroundStyle(CodexClient.executableURL() == nil ? .orange : .green)
                 Text("Uzun konuşmalar yeni pencere açmadan, salt-okunur geçici bir Codex işlemiyle düzenlenir.").font(.caption).foregroundStyle(.secondary)
+                Label("Sesli düşünce editörü etkin", systemImage: "text.badge.checkmark")
+                    .font(.caption)
+                Text("Codex konuşmayı cevaplamaz; anlamı ve doğal tonu koruyarak doğrudan yapıştırılabilir metne dönüştürür.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             SectionCard("Otomatik yönlendirme") {
                 HStack { Text("Eşik"); Spacer(); Text(settings.codexThreshold == 0 ? "Kapalı" : String(format: "%.1f saniye", settings.codexThreshold)).monospacedDigit() }

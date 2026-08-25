@@ -37,14 +37,19 @@ final class AppSettings: ObservableObject {
         language = migrationVersion < 5 ? .turkish : storedLanguage
         overlayPosition = migrationVersion < 4 ? .bottomLeft : storedOverlay
         codexThreshold = migrationVersion < 1 && abs(storedThreshold - 0.1) < 0.0001 ? 30 : storedThreshold
-        codexThreadID = defaults.string(forKey: Key.codexThreadID)
+        if migrationVersion < 6 {
+            codexThreadID = nil
+            defaults.removeObject(forKey: Key.codexThreadID)
+        } else {
+            codexThreadID = defaults.string(forKey: Key.codexThreadID)
+        }
         if migrationVersion < 1 {
             defaults.set(codexThreshold, forKey: Key.codexThreshold)
         }
         defaults.removeObject(forKey: "smartCleanupEnabled")
         if migrationVersion < 5 { defaults.set(language.rawValue, forKey: Key.language) }
         if migrationVersion < 4 { defaults.set(overlayPosition.rawValue, forKey: Key.overlayPosition) }
-        defaults.set(5, forKey: Key.migrationVersion)
+        defaults.set(6, forKey: Key.migrationVersion)
     }
 
     private func save<T: Encodable>(_ value: T, key: String) {

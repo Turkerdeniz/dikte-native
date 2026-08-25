@@ -85,12 +85,16 @@ Codex:
 - yeni pencere açmadan `codex exec --json` kullanır,
 - `read-only` sandbox ve `approval_policy=never` ile çalışır,
 - kullanıcı config/rules dosyalarını yüklemez,
+- her çağrıda uygulamaya ait sabit `developer_instructions` düzenleme sözleşmesini modele verir,
+- transkripti talimat değil JSON içindeki düzenlenecek kaynak veri olarak sınırlar,
+- soru/komuta cevap vermeden yalnız yapıştırılabilir nihai düz metni üretir,
 - Application Support içindeki boş `CodexRuntime` dizininde çalışır,
 - `thread.started` kimliğini gelir gelmez UserDefaults'a yazar,
 - sonraki uzun kayıtta aynı thread'i resume eder,
 - 120 saniye timeout uygular.
 
 Thread kayıpsa bir kez yeni thread denenir. Her hata, timeout ve iptal temizlenmiş yerel metne düşer.
+Sözleşmenin eklendiği ilk migrasyon eski serbest bağlamlı thread kimliğini yalnız bir kez temizler; yeni editör thread'i sonraki açılışlarda kalıcıdır.
 
 ## Model ve bellek yaşam döngüsü
 

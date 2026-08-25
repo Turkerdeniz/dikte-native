@@ -37,12 +37,11 @@ actor CodexClient {
         let process = Process(); let stdout = Pipe(); let stderr = Pipe()
         process.executableURL = executable; process.currentDirectoryURL = AppPaths.codexRuntime
         process.standardOutput = stdout; process.standardError = stderr
-        let prompt = """
-        Aşağıdaki Türkçe veya İngilizce sesli düşünceyi kullanıcının doğrudan kullanabileceği açık, mantıklı ve doğal bir metne dönüştür. Anlamı ve niyeti koru; yeni bilgi uydurma. Yalnız nihai metni döndür. Dosya oluşturma, komut çalıştırma veya sistem değişikliği yapma.\n\nKONUŞMA:\n\(transcript)
-        """
+        let prompt = CodexEditingPrompt.userPrompt(transcript: transcript)
         var arguments = ["exec"]
         if let existingThreadID { arguments += ["resume", existingThreadID] }
         arguments += [
+            "-c", CodexEditingPrompt.developerConfigurationOverride,
             "-c", "sandbox_mode=\"read-only\"", "-c", "approval_policy=\"never\"",
             "--strict-config", "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check", "--json", "--color", "never", prompt
         ]
