@@ -114,6 +114,15 @@ struct PerformanceDiagnostics: Codable, Equatable, Sendable {
     let threadCountStart: Int
     let threadCountEnd: Int
     let thermalState: String
+    let audioLevelReceivedCount: Int?
+    let audioLevelRenderedCount: Int?
+    let audioLevelCoalescedCount: Int?
+    let maximumAudioLevelLagMilliseconds: Double?
+    let overlayQueryCount: Int?
+    let overlaySkippedQueryCount: Int?
+    let maximumOverlayQueryMilliseconds: Double?
+    let modelLoadMilliseconds: Double?
+    let modelUnloadMilliseconds: Double?
 }
 
 struct AudioDiagnostics: Codable, Equatable, Sendable {

@@ -79,6 +79,23 @@ final class OverlayController {
     private var workspaceObservers: [NSObjectProtocol] = []
     private var applicationObservers: [NSObjectProtocol] = []
     private var trackingTimer: Timer?
+    private var trackingTask: Task<Void, Never>?
+    private var trackingGeneration = 0
+    private var trackingQueryCount = 0
+    private var skippedTrackingQueryCount = 0
+    private var maximumTrackingQueryMilliseconds = 0.0
+
+    struct TrackingStatistics: Equatable, Sendable {
+        let queryCount: Int
+        let skippedQueryCount: Int
+        let maximumQueryMilliseconds: Double
+    }
+
+    func trackingStatistics() -> TrackingStatistics {
+        TrackingStatistics(queryCount: trackingQueryCount,
+                           skippedQueryCount: skippedTrackingQueryCount,
+                           maximumQueryMilliseconds: maximumTrackingQueryMilliseconds)
+    }
 
     func show(model: AppModel) {
         self.model = model
@@ -162,15 +179,17 @@ final class OverlayController {
 
     private func startTracking() {
         guard trackingTimer == nil else { return }
+        trackingGeneration += 1
+        trackingQueryCount = 0
+        skippedTrackingQueryCount = 0
+        maximumTrackingQueryMilliseconds = 0
         let workspaceCenter = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.activeSpaceDidChangeNotification,
                      NSWorkspace.didActivateApplicationNotification] {
             workspaceObservers.append(workspaceCenter.addObserver(
                 forName: name, object: nil, queue: .main
             ) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.refreshTargetScreen(animateWithinDisplay: true)
-                }
+                Task { @MainActor [weak self] in self?.pollTargetScreen() }
             })
         }
         applicationObservers.append(NotificationCenter.default.addObserver(
@@ -179,18 +198,20 @@ final class OverlayController {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.refreshTargetScreen(animateWithinDisplay: true)
+                self?.pollTargetScreen()
             }
         })
         let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.refreshTargetScreen(animateWithinDisplay: true)
-            }
+            Task { @MainActor [weak self] in self?.pollTargetScreen() }
         }
         RunLoop.main.add(timer, forMode: .common)
         trackingTimer = timer
     }
 
     private func stopTracking() {
+        trackingGeneration += 1
+        trackingTask?.cancel()
+        trackingTask = nil
         trackingTimer?.invalidate()
         trackingTimer = nil
         let workspaceCenter = NSWorkspace.shared.notificationCenter
@@ -198,6 +219,47 @@ final class OverlayController {
         workspaceObservers.removeAll()
         applicationObservers.forEach(NotificationCenter.default.removeObserver)
         applicationObservers.removeAll()
+    }
+
+    private func pollTargetScreen() {
+        guard panel?.isVisible == true else { return }
+        guard trackingTask == nil else {
+            skippedTrackingQueryCount += 1
+            return
+        }
+        let generation = trackingGeneration
+        let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let currentDisplayID = activeDisplayID
+        let displays = NSScreen.screens.compactMap { screen -> OverlayDisplaySnapshot? in
+            guard let id = Self.displayID(for: screen) else { return nil }
+            return OverlayDisplaySnapshot(id: id, frame: CGDisplayBounds(id))
+        }
+        trackingTask = Task { @MainActor [weak self] in
+            let startedAt = DispatchTime.now().uptimeNanoseconds
+            let windows = await Task.detached(priority: .utility) {
+                Self.visibleWindows()
+            }.value
+            let resolvedID = OverlayScreenResolver.displayID(
+                frontmostPID: frontmostPID, currentDisplayID: currentDisplayID,
+                windows: windows, displays: displays
+            )
+            guard let self else { return }
+            guard generation == self.trackingGeneration else { return }
+            self.trackingTask = nil
+            guard !Task.isCancelled,
+                  self.panel?.isVisible == true else { return }
+            self.trackingQueryCount += 1
+            let milliseconds = Double(DispatchTime.now().uptimeNanoseconds - startedAt) / 1_000_000
+            self.maximumTrackingQueryMilliseconds = max(self.maximumTrackingQueryMilliseconds,
+                                                         milliseconds)
+            guard let resolvedID, resolvedID != self.activeDisplayID,
+                  let screen = NSScreen.screens.first(where: {
+                      Self.displayID(for: $0) == resolvedID
+                  }), let model = self.model else { return }
+            self.resizeAndPosition(model.settings.overlayPosition, on: screen,
+                                   animateWithinDisplay: false)
+            self.panel?.orderFrontRegardless()
+        }
     }
 
     private func screenUnderPointer() -> NSScreen? {
@@ -209,7 +271,7 @@ final class OverlayController {
         (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
     }
 
-    private static func visibleWindows() -> [OverlayWindowSnapshot] {
+    nonisolated private static func visibleWindows() -> [OverlayWindowSnapshot] {
         guard let list = CGWindowListCopyWindowInfo(
             [.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID
         ) as? [[String: Any]] else { return [] }
@@ -240,6 +302,12 @@ private extension NSRect {
 
 private struct OverlayView: View {
     @ObservedObject var model: AppModel
+    @ObservedObject private var meter: AudioMeterState
+
+    init(model: AppModel) {
+        self.model = model
+        meter = model.audioMeter
+    }
 
     var body: some View {
         Group {
@@ -264,7 +332,7 @@ private struct OverlayView: View {
                 .frame(width: 9, height: 9)
                 .shadow(color: model.isRecording ? .orange.opacity(0.7) : .clear, radius: 4)
                 .accessibilityLabel(recordingTitle)
-            CompactWaveform(levels: model.audioLevels)
+            CompactWaveform(levels: meter.levels)
             recordingTimer.frame(width: 42, alignment: .trailing)
             Button(action: model.stopRecording) {
                 Image(systemName: "stop.fill").font(.system(size: 11, weight: .semibold))
@@ -304,7 +372,7 @@ private struct OverlayView: View {
                 Text(recordingTitle).font(.caption.bold())
                 Text(model.recorder.builtInInputName).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             }.frame(width: 145, alignment: .leading)
-            LiveWaveform(levels: model.audioLevels)
+            LiveWaveform(levels: meter.levels)
             recordingTimer
             Button(action: model.stopRecording) { Image(systemName: "stop.fill") }
                 .buttonStyle(.borderless).help("Kaydı durdur")
@@ -319,7 +387,7 @@ private struct OverlayView: View {
 
     private var recordingTitle: String {
         if model.isArming { return "Mikrofon hazırlanıyor…" }
-        return (model.audioLevels.max() ?? 0) > 0.015 ? "Dinliyorum…" : "Ses bekleniyor"
+        return (meter.levels.max() ?? 0) > 0.015 ? "Dinliyorum…" : "Ses bekleniyor"
     }
 
     private func elapsed(at date: Date) -> String {
@@ -358,14 +426,9 @@ private struct CompactWaveform: View {
     let levels: [Float]
 
     var body: some View {
-        HStack(alignment: .center, spacing: 2) {
-            ForEach(Array(levels.suffix(18).enumerated()), id: \.offset) { _, level in
-                Capsule().fill(.primary.opacity(0.72))
-                    .frame(width: 2.5, height: max(2.5, CGFloat(level) * 26))
-            }
-        }
+        WaveformCanvas(levels: Array(levels.suffix(18)), barWidth: 2.5, spacing: 2,
+                       minimumHeight: 2.5, amplitude: 26)
         .frame(maxWidth: .infinity, minHeight: 28)
-        .animation(.linear(duration: 0.06), value: levels)
         .accessibilityLabel("Canlı mikrofon ses seviyesi")
     }
 }
@@ -374,14 +437,34 @@ private struct LiveWaveform: View {
     let levels: [Float]
 
     var body: some View {
-        HStack(alignment: .center, spacing: 2.5) {
-            ForEach(Array(levels.enumerated()), id: \.offset) { _, level in
-                Capsule().fill(.primary.opacity(0.72))
-                    .frame(width: 3, height: max(3, CGFloat(level) * 38))
+        WaveformCanvas(levels: levels, barWidth: 3, spacing: 2.5,
+                       minimumHeight: 3, amplitude: 38)
+        .frame(maxWidth: .infinity, minHeight: 42)
+        .accessibilityLabel("Canlı mikrofon ses seviyesi")
+    }
+}
+
+private struct WaveformCanvas: View {
+    let levels: [Float]
+    let barWidth: CGFloat
+    let spacing: CGFloat
+    let minimumHeight: CGFloat
+    let amplitude: CGFloat
+
+    var body: some View {
+        Canvas(rendersAsynchronously: true) { context, size in
+            guard !levels.isEmpty else { return }
+            let totalWidth = CGFloat(levels.count) * barWidth
+                + CGFloat(max(0, levels.count - 1)) * spacing
+            var x = max(0, (size.width - totalWidth) / 2)
+            for level in levels {
+                let height = max(minimumHeight, CGFloat(level) * amplitude)
+                let rect = CGRect(x: x, y: (size.height - height) / 2,
+                                  width: barWidth, height: height)
+                context.fill(Path(roundedRect: rect, cornerRadius: barWidth / 2),
+                             with: .color(.primary.opacity(0.72)))
+                x += barWidth + spacing
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 42)
-        .animation(.linear(duration: 0.06), value: levels)
-        .accessibilityLabel("Canlı mikrofon ses seviyesi")
     }
 }

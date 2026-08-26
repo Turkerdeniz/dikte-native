@@ -46,12 +46,14 @@ private struct GeneralSettingsView: View {
     @ObservedObject var model: AppModel
     @ObservedObject private var settings: AppSettings
     @ObservedObject private var diagnosticStore: WhisperDiagnosticStore
+    @ObservedObject private var audioMeter: AudioMeterState
     @State private var recordingHotKey = false
     @State private var confirmDeleteDiagnostics = false
     init(model: AppModel) {
         self.model = model
         settings = model.settings
         diagnosticStore = model.diagnosticStore
+        audioMeter = model.audioMeter
     }
 
     var body: some View {
@@ -71,7 +73,7 @@ private struct GeneralSettingsView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(model.isMicrophoneTest ? (model.isArming ? "Mikrofon hazırlanıyor…" : "Canlı seviye") : "Mikrofon testi")
                                 .font(.caption)
-                            ProgressView(value: Double(model.audioLevels.max() ?? 0), total: 1)
+                            ProgressView(value: Double(audioMeter.levels.max() ?? 0), total: 1)
                                 .frame(width: 220)
                         }
                         Spacer()
@@ -208,7 +210,7 @@ private struct LocalModelSettingsView: View {
             SectionCard("Bellek") {
                 Label(store.isLoaded ? "Whisper bellekte ve hazır" : "Whisper bellekte değil",
                       systemImage: store.isLoaded ? "bolt.fill" : "moon")
-                Text("Turbo modeli son kullanımdan 120 saniye sonra veya bellek baskısında bırakılır.")
+                Text("Turbo modeli son kullanımdan \(Int(ModelLifecyclePolicy.warmModelSeconds)) saniye sonra veya bellek baskısında bırakılır.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             SectionCard("Konuşma algılama · Silero VAD") {
@@ -414,6 +416,25 @@ private struct HistoryView: View {
                                     GridRow { Text("Disk okuma/yazma").foregroundStyle(.secondary); Text("\(formatBytes(performance.diskReadBytes)) / \(formatBytes(performance.diskWrittenBytes))") }
                                     GridRow { Text("Thread").foregroundStyle(.secondary); Text("\(performance.threadCountStart) → \(performance.threadCountEnd)") }
                                     GridRow { Text("Termal durum").foregroundStyle(.secondary); Text(performance.thermalState) }
+                                    if let received = performance.audioLevelReceivedCount,
+                                       let rendered = performance.audioLevelRenderedCount,
+                                       let coalesced = performance.audioLevelCoalescedCount {
+                                        GridRow { Text("Ses seviyesi").foregroundStyle(.secondary); Text("\(received) alındı / \(rendered) çizildi / \(coalesced) birleştirildi") }
+                                    }
+                                    if let lag = performance.maximumAudioLevelLagMilliseconds {
+                                        GridRow { Text("En yüksek görsel gecikme").foregroundStyle(.secondary); Text(String(format: "%.0f ms", lag)) }
+                                    }
+                                    if let queries = performance.overlayQueryCount,
+                                       let skipped = performance.overlaySkippedQueryCount,
+                                       let maximum = performance.maximumOverlayQueryMilliseconds {
+                                        GridRow { Text("Ekran takibi").foregroundStyle(.secondary); Text(String(format: "%d sorgu / %d atlandı / en çok %.1f ms", queries, skipped, maximum)) }
+                                    }
+                                    if let load = performance.modelLoadMilliseconds {
+                                        GridRow { Text("Model yükleme").foregroundStyle(.secondary); Text(String(format: "%.0f ms", load)) }
+                                    }
+                                    if let unload = performance.modelUnloadMilliseconds {
+                                        GridRow { Text("Model bırakma").foregroundStyle(.secondary); Text(String(format: "%.0f ms", unload)) }
+                                    }
                                 }.font(.caption).padding(.vertical, 6)
                                 ForEach(performance.stages) { stage in
                                     HStack { Text(stage.name); Spacer(); Text(String(format: "%.0f ms", stage.milliseconds)).monospacedDigit() }

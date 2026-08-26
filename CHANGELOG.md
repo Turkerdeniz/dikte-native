@@ -2,6 +2,14 @@
 
 Bu dosya kullanıcıya ve bakım yapan geliştiriciye dönük önemli değişiklikleri özetler. Ayrıntılı teknik davranış için `docs/` belgelerine bak.
 
+## 1.1.2-local aday — 26 Ağustos 2026
+
+- CoreAudio seviye teslimi tek slotlu bounded kanala taşındı; MainActor görev birikmesi kaldırıldı.
+- Waveform tek Canvas çizimine geçirildi ve ekran takibi tek eşzamanlı sorguyla sınırlandı.
+- Whisper/VAD sıcak bekleme süresi 45 saniyeye indirildi; büyük kayıt tamponları işlem sonunda bırakılıyor.
+- ggml Metal residency heartbeat devre dışı bırakıldı; Metal ve flash-attention korunuyor.
+- History performans ayrıntısına görsel kuyruk, ekran sorgusu ve model süreleri eklendi.
+
 ## 1.1.1-local aday — 26 Ağustos 2026
 
 - Kayıt/işleme overlay'i ön uygulamanın görünür penceresini izleyerek aktif fiziksel ekrana ve macOS Space'ine taşınıyor.

@@ -18,7 +18,6 @@ final class AppModel: ObservableObject {
     @Published private(set) var lastResult: String?
     @Published private(set) var loginAtStartup = false
     @Published private(set) var microphonePermission = AVCaptureDevice.authorizationStatus(for: .audio)
-    @Published private(set) var audioLevels = [Float](repeating: 0, count: 34)
     @Published private(set) var lastAudioDiagnostics: AudioDiagnostics?
     @Published private(set) var isMicrophoneTest = false
     @Published private(set) var diagnosticCaptureArmed = false
@@ -29,6 +28,7 @@ final class AppModel: ObservableObject {
     let vadModelStore = VADModelStore()
     let corrections = CorrectionStore()
     let diagnosticStore = WhisperDiagnosticStore()
+    let audioMeter = AudioMeterState()
     let recorder = AudioRecorder()
     let pasteService = PasteService()
     private let hotKey = HotKeyManager()
@@ -43,12 +43,13 @@ final class AppModel: ObservableObject {
     private var memoryPressureMonitor: MemoryPressureMonitor?
     private var memoryPressureTask: Task<Void, Never>?
     private var modelReleaseTask: Task<Void, Never>?
+    private var modelLifecycleGeneration = 0
     private let modelIdleReleaseScheduler = ModelIdleReleaseScheduler()
     private var memoryPressureLevel: MemoryPressureLevel = .normal
     private var pendingMemoryRelease = false
     private var activeDiagnosticCapture = false
     private var diagnosticCaptureArm = OneShotDiagnosticCaptureArm()
-    private var audioLevelSmoother = AudioLevelSmoother()
+    private var audioLevelSink: AudioLevelSink?
     private let breadcrumbStore = CrashBreadcrumbStore()
     private let overlay = OverlayController()
     private static let lifecycleLog = Logger(subsystem: "com.turkerdenizer.dikte.native", category: "Lifecycle")
@@ -105,8 +106,7 @@ final class AppModel: ObservableObject {
                                   memoryPressureLevel: memoryPressureLevel)
             performanceTracker = PerformanceTracker()
             performanceTracker?.begin("Kayıt")
-            audioLevelSmoother.reset()
-            audioLevels = [Float](repeating: 0, count: 34)
+            audioLevelSink = audioMeter.start()
             phase = .arming(startedAt: startedAt, attempt: 1)
             overlay.show(model: self)
             try await beginCapture(restarting: false)
@@ -145,8 +145,7 @@ final class AppModel: ObservableObject {
             if isMicrophoneTest {
                 lastAudioDiagnostics = recording.diagnostics
                 isMicrophoneTest = false
-                audioLevels = [Float](repeating: 0, count: 34)
-                _ = performanceTracker?.finish()
+                _ = finishPerformance()
                 pasteService.notify("Mikrofon testi tamamlandı", recording.diagnostics.summary)
                 returnToIdle()
                 return
@@ -174,6 +173,8 @@ final class AppModel: ObservableObject {
         memoryPressureTask?.cancel(); memoryPressureTask = nil
         memoryPressureMonitor?.cancel(); memoryPressureMonitor = nil
         performanceTracker = nil
+        audioLevelSink = nil
+        audioMeter.stop()
         breadcrumbStore.clear()
         Task { await codex.cancel(); await whisper.unload(); await speechSegmenter.unload() }
         phase = .idle
@@ -291,7 +292,11 @@ final class AppModel: ObservableObject {
             guard case .ready = modelStore.status else { throw DikteError.modelMissing }
             if let releaseTask = modelReleaseTask { await releaseTask.value }
             try Task.checkCancellation()
+            let modelLoadStartedAt = DispatchTime.now().uptimeNanoseconds
             try await whisper.load(modelURL: AppPaths.model)
+            performanceTracker?.recordModelLoad(
+                milliseconds: elapsedMilliseconds(since: modelLoadStartedAt)
+            )
             modelStore.isLoaded = true
             breadcrumbStore.update(modelLoaded: true)
 
@@ -405,7 +410,7 @@ final class AppModel: ObservableObject {
             lastResult = final
             _ = pasteService.copyAndOptionallyPaste(final, shouldPaste: settings.automaticPaste)
             diagnostics.voicedDuration = detectedSpeechDuration
-            let performance = performanceTracker?.finish()
+            let performance = finishPerformance()
             let wordsPerSecond = Double(raw.split(whereSeparator: \Character.isWhitespace).count) / max(0.001, detectedSpeechDuration)
             let charactersPerSecond = Double(raw.filter { !$0.isWhitespace }.count) / max(0.001, detectedSpeechDuration)
             let historyID = UUID()
@@ -438,17 +443,14 @@ final class AppModel: ObservableObject {
 
     private func setStage(_ stage: ProcessingStage) { phase = .processing(stage); overlay.update(model: self) }
 
-    private func receiveAudioLevel(_ level: Float) {
-        guard isRecording else { return }
-        audioLevels.removeFirst()
-        audioLevels.append(audioLevelSmoother.update(level))
-    }
-
     private func beginCapture(restarting: Bool) async throws {
+        guard let audioLevelSink else {
+            throw DikteError.message("Ses seviyesi hattı hazırlanamadı.")
+        }
         try await recorder.start(restarting: restarting) { [weak self] in
             self?.receiveFirstAudioSample()
-        } onLevel: { [weak self] level in
-            self?.receiveAudioLevel(level)
+        } onLevel: { [audioLevelSink] level in
+            audioLevelSink.yield(level)
         }
     }
 
@@ -502,7 +504,7 @@ final class AppModel: ObservableObject {
                                  rawTranscript: "", finalText: message,
                                  deterministicText: nil, localCorrectedText: nil,
                                  audioDiagnostics: effectiveDiagnostics,
-                                 performanceDiagnostics: performanceTracker?.finish(),
+                                 performanceDiagnostics: finishPerformance(),
                                  diagnosticCaptureID: diagnosticID))
         alertMessage = detail.isEmpty ? message : "\(message)\n\n\(detail)"
         returnToIdle()
@@ -522,7 +524,7 @@ final class AppModel: ObservableObject {
                                  rawTranscript: "", finalText: "Ses yok.",
                                  deterministicText: nil, localCorrectedText: nil,
                                  audioDiagnostics: diagnostics,
-                                 performanceDiagnostics: performanceTracker?.finish(),
+                                 performanceDiagnostics: finishPerformance(),
                                  diagnosticCaptureID: diagnosticID))
         pasteService.notify("Dikte", "Ses yok.")
         returnToIdle()
@@ -537,7 +539,7 @@ final class AppModel: ObservableObject {
             lastResult = cleaned
             _ = pasteService.copyAndOptionallyPaste(cleaned, shouldPaste: false)
         }
-        let performance = performanceTracker?.finish()
+        let performance = finishPerformance()
         let historyID = UUID()
         let diagnosticID = await persistDiagnosticIfNeeded(
             recording: capture, historyEntryID: historyID, mode: .incomplete,
@@ -594,6 +596,15 @@ final class AppModel: ObservableObject {
         )
     }
 
+    private func finishPerformance() -> PerformanceDiagnostics? {
+        guard let performanceTracker else { return nil }
+        performanceTracker.recordVisualDiagnostics(
+            audioMeter: audioMeter.statistics(),
+            overlay: overlay.trackingStatistics()
+        )
+        return performanceTracker.finish()
+    }
+
     private func elapsedMilliseconds(since startedAt: UInt64) -> Double {
         Double(DispatchTime.now().uptimeNanoseconds - startedAt) / 1_000_000
     }
@@ -635,32 +646,40 @@ final class AppModel: ObservableObject {
         }
         guard case .ready = modelStore.status else { return }
         cancelModelPreload()
+        modelLifecycleGeneration += 1
+        let generation = modelLifecycleGeneration
         modelPreloadTask = Task { [weak self] in
             guard let self else { return }
             do {
                 try await whisper.load(modelURL: AppPaths.model)
                 try Task.checkCancellation()
-                guard memoryPressureLevel == .normal, isCapturing || isProcessing else {
-                    await whisper.unload()
-                    modelStore.isLoaded = false
-                    breadcrumbStore.update(modelLoaded: false)
-                    modelPreloadTask = nil
+                guard generation == modelLifecycleGeneration,
+                      memoryPressureLevel == .normal, isCapturing || isProcessing else {
+                    if generation == modelLifecycleGeneration {
+                        await whisper.unload()
+                        modelStore.isLoaded = false
+                        breadcrumbStore.update(modelLoaded: false)
+                        modelPreloadTask = nil
+                    }
                     return
                 }
                 modelStore.isLoaded = true
                 breadcrumbStore.update(modelLoaded: true)
             } catch is CancellationError {
-                await whisper.unload()
-                modelStore.isLoaded = false
-                breadcrumbStore.update(modelLoaded: false)
+                if generation == modelLifecycleGeneration {
+                    await whisper.unload()
+                    modelStore.isLoaded = false
+                    breadcrumbStore.update(modelLoaded: false)
+                }
             } catch {
                 Self.lifecycleLog.error("Whisper preload failed: \(error.localizedDescription, privacy: .public)")
             }
-            modelPreloadTask = nil
+            if generation == modelLifecycleGeneration { modelPreloadTask = nil }
         }
     }
 
     private func cancelModelPreload() {
+        modelLifecycleGeneration += 1
         modelPreloadTask?.cancel()
         modelPreloadTask = nil
     }
@@ -668,9 +687,16 @@ final class AppModel: ObservableObject {
     private func releaseWhisperModel(reason: String) {
         modelIdleReleaseScheduler.cancel()
         guard modelReleaseTask == nil else { return }
+        cancelModelPreload()
+        modelLifecycleGeneration += 1
         modelReleaseTask = Task { [weak self] in
             guard let self else { return }
+            let startedAt = DispatchTime.now().uptimeNanoseconds
             await whisper.unload()
+            await speechSegmenter.unload()
+            performanceTracker?.recordModelUnload(
+                milliseconds: elapsedMilliseconds(since: startedAt)
+            )
             modelStore.isLoaded = false
             breadcrumbStore.update(modelLoaded: false)
             Self.lifecycleLog.notice("Whisper model released: \(reason, privacy: .public)")
@@ -684,7 +710,8 @@ final class AppModel: ObservableObject {
         performanceTracker = nil
         processingTask = nil
         activeDiagnosticCapture = false
-        audioLevelSmoother.reset()
+        audioLevelSink = nil
+        audioMeter.stop()
         phase = .idle
         overlay.hide()
         breadcrumbStore.clear()
@@ -697,7 +724,7 @@ final class AppModel: ObservableObject {
             Self.lifecycleLog.notice("Applying pending Whisper release on return to idle")
             releaseWhisperModel(reason: "return-to-idle")
         } else if modelStore.isLoaded {
-            modelIdleReleaseScheduler.schedule(after: 120) { [weak self] in
+            modelIdleReleaseScheduler.schedule(after: ModelLifecyclePolicy.warmModelSeconds) { [weak self] in
                 guard let self, self.phase == .idle else { return }
                 Self.lifecycleLog.notice("Applying Whisper release after idle timeout")
                 self.releaseWhisperModel(reason: "idle-timeout")
@@ -735,6 +762,10 @@ final class AppModel: ObservableObject {
         let text = error.localizedDescription.lowercased()
         return text.contains("thread") || text.contains("session") || text.contains("conversation") || text.contains("not found")
     }
+}
+
+enum ModelLifecyclePolicy {
+    static let warmModelSeconds: TimeInterval = 45
 }
 
 private func withTimeout<T: Sendable>(seconds: Double, operation: @escaping @Sendable () async throws -> T) async throws -> T {

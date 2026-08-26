@@ -46,7 +46,7 @@ actor SpeechSegmenter {
             whisper_vad_segments_from_samples(context, params, $0.baseAddress, Int32($0.count))
         }
         guard let pointer else { throw DikteError.message("Konuşma bölümleri çıkarılamadı.") }
-        defer { whisper_vad_free_segments(pointer) }
+        defer { autoreleasepool { whisper_vad_free_segments(pointer) } }
         try Task.checkCancellation()
 
         let count = max(0, Int(whisper_vad_segments_n_segments(pointer)))
@@ -68,7 +68,7 @@ actor SpeechSegmenter {
     }
 
     func unload() {
-        if let context { whisper_vad_free(context) }
+        if let context { autoreleasepool { whisper_vad_free(context) } }
         context = nil
         loadedModelURL = nil
     }
@@ -85,7 +85,9 @@ actor SpeechSegmenter {
         var params = whisper_vad_default_context_params()
         params.n_threads = Int32(max(1, min(ProcessInfo.processInfo.activeProcessorCount / 2, 4)))
         params.use_gpu = false
-        context = modelURL.path.withCString { whisper_vad_init_from_file_with_params($0, params) }
+        context = autoreleasepool {
+            modelURL.path.withCString { whisper_vad_init_from_file_with_params($0, params) }
+        }
         guard context != nil else { throw DikteError.message("Konuşma algılama modeli yüklenemedi.") }
         loadedModelURL = modelURL
     }

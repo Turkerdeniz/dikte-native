@@ -2,6 +2,20 @@ import AppKit
 import Darwin
 import ServiceManagement
 import SwiftUI
+import OSLog
+
+enum MetalRuntimePolicy {
+    static let log = Logger(subsystem: "com.turkerdenizer.dikte.native", category: "Performance")
+
+    static func configure() {
+        // whisper.cpp v1.9.2's ggml residency heartbeat can survive model unload on
+        // macOS 15+. Dikte already owns a bounded warm-model policy, so residency
+        // sets add wakeups without providing the lifecycle control we need.
+        setenv("GGML_METAL_NO_RESIDENCY", "1", 1)
+        unsetenv("GGML_METAL_RESIDENCY_KEEP_ALIVE_S")
+        log.notice("Metal policy configured: residency disabled; warm model = 45 seconds")
+    }
+}
 
 enum MaintenanceCommand: Equatable {
     case unregisterLoginItem
@@ -14,7 +28,12 @@ enum MaintenanceCommand: Equatable {
 @main
 struct DikteApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    @StateObject private var model = AppModel()
+    @StateObject private var model: AppModel
+
+    init() {
+        MetalRuntimePolicy.configure()
+        _model = StateObject(wrappedValue: AppModel())
+    }
 
     var body: some Scene {
         MenuBarExtra {

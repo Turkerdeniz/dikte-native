@@ -3,7 +3,7 @@ set -euo pipefail
 
 IDENTITY="Dikte Native Local Signing"
 ROOT_DIR="${0:A:h:h}"
-BUILD_DIR="$ROOT_DIR/build"
+BUILD_DIR="${DIKTE_BUILD_DIR:-$ROOT_DIR/build}"
 STAGE_DIR="$(mktemp -d /private/tmp/dikte-native-build.XXXXXX)"
 trap 'rm -rf "$STAGE_DIR"' EXIT
 APP_DIR="$STAGE_DIR/Dikte.app"
@@ -60,5 +60,8 @@ ARCHS="$(lipo -archs "$CONTENTS/MacOS/DikteNative")"
 [[ "$ARCHS" == "arm64" ]] || { print -u2 "Unexpected executable architectures: $ARCHS"; exit 1; }
 mkdir -p "$BUILD_DIR"
 rm -f "$OUTPUT_ZIP"
-ditto -c -k --keepParent "$APP_DIR" "$OUTPUT_ZIP"
+# Resource forks/FinderInfo are not part of the signed bundle and make a freshly
+# extracted archive fail strict code-sign verification. Keep the ZIP portable by
+# omitting AppleDouble metadata from the release artifact.
+ditto -c -k --keepParent --norsrc "$APP_DIR" "$OUTPUT_ZIP"
 print "$OUTPUT_ZIP"

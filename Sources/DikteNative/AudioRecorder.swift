@@ -11,7 +11,7 @@ private final class SampleAccumulator: @unchecked Sendable {
 
     func reset(device: AVCaptureDevice, restartCount: Int) {
         lock.withLock {
-            storage.removeAll(keepingCapacity: true)
+            storage.removeAll(keepingCapacity: false)
             diagnostics = AudioDiagnostics(deviceID: device.uniqueID, deviceName: device.localizedName,
                                            restartCount: restartCount)
             squaredSum = 0
@@ -67,7 +67,9 @@ private final class SampleAccumulator: @unchecked Sendable {
             current.sampleCount = storage.count
             let capture = AudioCapture(samples: storage, sampleRate: 16_000, duration: duration,
                                        diagnostics: current)
-            storage.removeAll(keepingCapacity: true)
+            // Do not retain the capacity of a five-minute recording for the rest of the
+            // process lifetime. The next recording grows naturally from an empty buffer.
+            storage.removeAll(keepingCapacity: false)
             diagnostics = AudioDiagnostics()
             squaredSum = 0
             voicedSamples = 0
@@ -89,7 +91,7 @@ private final class CaptureOutputDelegate: NSObject, AVCaptureAudioDataOutputSam
     private var deliveredFirstSample = false
     private var lastLevelDelivery = CFAbsoluteTimeGetCurrent()
     var onFirstSample: (@MainActor @Sendable () -> Void)?
-    var onLevel: (@MainActor @Sendable (Float) -> Void)?
+    var onLevel: (@Sendable (Float) -> Void)?
 
     init(accumulator: SampleAccumulator) { self.accumulator = accumulator }
 
@@ -116,7 +118,7 @@ private final class CaptureOutputDelegate: NSObject, AVCaptureAudioDataOutputSam
             if now - lastLevelDelivery >= 1.0 / 30.0, let onLevel {
                 lastLevelDelivery = now
                 let displayLevel = min(1, pow(max(0, rms), 0.45) * 1.8)
-                Task { @MainActor in onLevel(displayLevel) }
+                onLevel(displayLevel)
             }
         } catch {
             accumulator.noteConversionError(error.localizedDescription)
@@ -205,7 +207,7 @@ private final class CaptureSessionDriver: @unchecked Sendable {
 
     func start(device: AVCaptureDevice, accumulator: SampleAccumulator,
                onFirstSample: @escaping @MainActor @Sendable () -> Void,
-               onLevel: @escaping @MainActor @Sendable (Float) -> Void) async throws {
+               onLevel: @escaping @Sendable (Float) -> Void) async throws {
         try await withCheckedThrowingContinuation { continuation in
             queue.async {
                 do {
@@ -367,7 +369,7 @@ final class AudioRecorder {
 
     func start(restarting: Bool = false,
                onFirstSample: @escaping @MainActor @Sendable () -> Void,
-               onLevel: @escaping @MainActor @Sendable (Float) -> Void) async throws {
+               onLevel: @escaping @Sendable (Float) -> Void) async throws {
         guard let device = Self.builtInMicrophone() else {
             throw DikteError.message("MacBook’un yerleşik mikrofonu bulunamadı; başka giriş aygıtına geçilmedi.")
         }

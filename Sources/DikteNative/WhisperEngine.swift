@@ -47,7 +47,9 @@ actor WhisperEngine {
         var params = whisper_context_default_params()
         params.use_gpu = true
         params.flash_attn = true
-        context = modelURL.path.withCString { whisper_init_from_file_with_params($0, params) }
+        context = autoreleasepool {
+            modelURL.path.withCString { whisper_init_from_file_with_params($0, params) }
+        }
         guard context != nil else { throw DikteError.modelInvalid }
         loadedModelURL = modelURL
     }
@@ -127,7 +129,9 @@ actor WhisperEngine {
                 whisper_full(context, params, $0.baseAddress, Int32($0.count))
             }
         }
-        let result = prompt.map { value in value.withCString(run) } ?? run(nil)
+        let result = autoreleasepool {
+            prompt.map { value in value.withCString(run) } ?? run(nil)
+        }
         try Task.checkCancellation()
         guard result == 0 else { throw DikteError.transcriptionFailed }
         let count = whisper_full_n_segments(context)
@@ -157,7 +161,7 @@ actor WhisperEngine {
     }
 
     func unload() {
-        if let context { whisper_free(context) }
+        if let context { autoreleasepool { whisper_free(context) } }
         context = nil
         loadedModelURL = nil
     }

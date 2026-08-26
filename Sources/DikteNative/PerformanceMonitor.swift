@@ -47,6 +47,10 @@ final class PerformanceTracker {
     private let startResources = ProcessResourceSnapshot.capture()
     private var activeStage: (name: String, startedAt: UInt64, signpostID: OSSignpostID)?
     private var stages: [StageDuration] = []
+    private var audioMeterStatistics: AudioMeterStatistics?
+    private var overlayStatistics: OverlayController.TrackingStatistics?
+    private var modelLoadMilliseconds: Double?
+    private var modelUnloadMilliseconds: Double?
 
     init() {
         processingStartedAt = startedAt
@@ -63,6 +67,15 @@ final class PerformanceTracker {
     func markProcessingStarted() {
         processingStartedAt = DispatchTime.now().uptimeNanoseconds
     }
+
+    func recordVisualDiagnostics(audioMeter: AudioMeterStatistics,
+                                 overlay: OverlayController.TrackingStatistics) {
+        audioMeterStatistics = audioMeter
+        overlayStatistics = overlay
+    }
+
+    func recordModelLoad(milliseconds: Double) { modelLoadMilliseconds = milliseconds }
+    func recordModelUnload(milliseconds: Double) { modelUnloadMilliseconds = milliseconds }
 
     func finish() -> PerformanceDiagnostics {
         endStage()
@@ -81,7 +94,16 @@ final class PerformanceTracker {
             diskWrittenBytes: delta(endResources.diskWrittenBytes, startResources.diskWrittenBytes),
             threadCountStart: startResources.threadCount,
             threadCountEnd: endResources.threadCount,
-            thermalState: Self.thermalStateTitle
+            thermalState: Self.thermalStateTitle,
+            audioLevelReceivedCount: audioMeterStatistics?.receivedCount,
+            audioLevelRenderedCount: audioMeterStatistics?.renderedCount,
+            audioLevelCoalescedCount: audioMeterStatistics?.coalescedCount,
+            maximumAudioLevelLagMilliseconds: audioMeterStatistics?.maximumDeliveryLagMilliseconds,
+            overlayQueryCount: overlayStatistics?.queryCount,
+            overlaySkippedQueryCount: overlayStatistics?.skippedQueryCount,
+            maximumOverlayQueryMilliseconds: overlayStatistics?.maximumQueryMilliseconds,
+            modelLoadMilliseconds: modelLoadMilliseconds,
+            modelUnloadMilliseconds: modelUnloadMilliseconds
         )
     }
 
