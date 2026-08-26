@@ -2,13 +2,21 @@
 
 Bu dosya kullanıcıya ve bakım yapan geliştiriciye dönük önemli değişiklikleri özetler. Ayrıntılı teknik davranış için `docs/` belgelerine bak.
 
+## 1.1.1-local aday — 26 Ağustos 2026
+
+- Kayıt/işleme overlay'i ön uygulamanın görünür penceresini izleyerek aktif fiziksel ekrana ve macOS Space'ine taşınıyor.
+- Ekran çözümlemesi kullanılamazsa imleç ekranına, ardından ana ekrana güvenli fallback uygulanıyor; imleç normal durumda overlay'i peşinden sürüklemiyor.
+- Overlay yalnız görünürken Space, uygulama ve ekran değişikliklerini izliyor; gizlendiğinde gözlemciler ve 250 ms takip timer'ı duruyor.
+- Gerçek RMS dalgası 30 FPS'e çıkarıldı; sabit attack/release filtresi ve 60 ms doğrusal geçişle hareket yumuşatıldı.
+- Bu sürüm ayrı aday build olarak hazırlanır; açık kullanıcı izni olmadan kurulu uygulamaya yüklenmez.
+
 ## 1.1.0-local aday — 25 Ağustos 2026
 
 - İsteğe bağlı, tek kullanımlık “Sonraki kaydı tanı için sakla” akışı eklendi.
 - Yalnız açıkça işaretlenen kayıt 16 kHz mono PCM WAV olarak; VAD bölgeleri, Whisper parça tanıları ve metin aşamalarıyla birlikte ayrı `Diagnostics` paketinde saklanıyor.
 - Tanı kaydı History kimliğine bağlanıyor; General ve History ekranlarından görüntülenebiliyor ve tanı verileri normal geçmiş/model dosyalarına dokunmadan silinebiliyor.
 - Mikrofon testi tanı işaretini tüketmiyor; normal kullanımda ham sesin diske yazılmaması davranışı korunuyor.
-- Bu sürüm aday build olarak üretildi; çalışan `/Applications/Dikte.app` kurulumu değiştirilmedi.
+- Bu sürüm 25 Ağustos 2026'da `/Applications/Dikte.app` üzerine kuruldu.
 
 ## 1.0.2-local — 25 Ağustos 2026
 

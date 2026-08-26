@@ -1,12 +1,12 @@
 # Dikte Native — Güncel Handoff
 
-Son doğrulama: 25 Ağustos 2026
+Son doğrulama: 26 Ağustos 2026
 
 ## Mevcut durum
 
 - Kaynak deposu: `main` dalı, private GitHub hedefi `Turkerdeniz/dikte-native`
-- Kurulu bundle: `com.turkerdenizer.dikte.native`, sürüm `1.0.2 (3)`
-- Repo aday build: `1.1.0 (4)`; `/Applications` üzerine kurulmadı
+- Kurulu bundle: `com.turkerdenizer.dikte.native`, sürüm `1.1.0 (4)`
+- Repo aday build: `1.1.1 (5)`; `/Applications` üzerine kurulmadı
 - Hedef: macOS 15+, yalnız ARM64
 - Kurulum: `/Applications/Dikte.app`
 - Model: `ggml-large-v3-turbo-q5_0.bin`, 574.041.195 byte, doğrulanmış SHA-256
@@ -15,7 +15,7 @@ Son doğrulama: 25 Ağustos 2026
 - Varsayılan kısayol: `⌥D`
 - Codex eşiği: gerçek kayıt süresi kesin olarak `>30.0 saniye`
 - Codex: uygulamaya ait developer düzenleme sözleşmesi; transkript JSON veri sınırında, doğrudan yapıştırılabilir metin çıktısı
-- Overlay: sol alt kompakt
+- Overlay: sol alt kompakt; aktif Space ve ön uygulamanın fiziksel ekranını otomatik takip eder
 - Whisper tanısı: tek kullanımlık ve varsayılan kapalı; açıkça seçilen kayıt `Diagnostics/` altında geçici WAV + metadata olarak saklanır
 
 ## Son doğrulama özeti

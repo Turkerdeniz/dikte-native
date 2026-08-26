@@ -111,9 +111,9 @@ private final class CaptureOutputDelegate: NSObject, AVCaptureAudioDataOutputSam
                 if let onFirstSample { Task { @MainActor in onFirstSample() } }
             }
             let now = CFAbsoluteTimeGetCurrent()
-            // The waveform is presentation-only. Twenty updates per second remains fluid while
-            // avoiding unnecessary SwiftUI invalidations during longer recordings.
-            if now - lastLevelDelivery >= 1.0 / 20.0, let onLevel {
+            // The waveform is presentation-only. Thirty updates per second keeps bar movement
+            // fluid without coupling visual refreshes to the full audio callback rate.
+            if now - lastLevelDelivery >= 1.0 / 30.0, let onLevel {
                 lastLevelDelivery = now
                 let displayLevel = min(1, pow(max(0, rms), 0.45) * 1.8)
                 Task { @MainActor in onLevel(displayLevel) }

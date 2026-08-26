@@ -1,5 +1,56 @@
 import AppKit
+import CoreGraphics
 import SwiftUI
+
+struct OverlayDisplaySnapshot: Equatable, Sendable {
+    let id: CGDirectDisplayID
+    let frame: CGRect
+}
+
+struct OverlayWindowSnapshot: Equatable, Sendable {
+    let ownerPID: pid_t
+    let layer: Int
+    let bounds: CGRect
+}
+
+enum OverlayScreenResolver {
+    static let minimumWindowSize = CGSize(width: 120, height: 80)
+
+    static func displayID(frontmostPID: pid_t?, currentDisplayID: CGDirectDisplayID?,
+                          windows: [OverlayWindowSnapshot],
+                          displays: [OverlayDisplaySnapshot]) -> CGDirectDisplayID? {
+        guard !displays.isEmpty else { return nil }
+        guard let frontmostPID,
+              let window = windows.first(where: {
+                  $0.ownerPID == frontmostPID && $0.layer == 0
+                      && $0.bounds.width >= minimumWindowSize.width
+                      && $0.bounds.height >= minimumWindowSize.height
+              }) else { return nil }
+
+        let overlaps = displays.map { display in
+            (display.id, window.bounds.intersection(display.frame).standardizedArea)
+        }
+        guard let best = overlaps.max(by: { $0.1 < $1.1 }), best.1 > 0 else { return nil }
+        let windowArea = max(1, window.bounds.standardizedArea)
+
+        if let currentDisplayID,
+           displays.contains(where: { $0.id == currentDisplayID }),
+           let currentOverlap = overlaps.first(where: { $0.0 == currentDisplayID })?.1 {
+            if currentOverlap / windowArea >= 0.5 { return currentDisplayID }
+            if best.1 / windowArea > 0.5 { return best.0 }
+            return currentDisplayID
+        }
+        return best.0
+    }
+}
+
+private extension CGRect {
+    var standardizedArea: CGFloat {
+        let rect = standardized
+        guard !rect.isNull, !rect.isInfinite else { return 0 }
+        return max(0, rect.width) * max(0, rect.height)
+    }
+}
 
 enum OverlayLayout {
     static let compactSize = NSSize(width: 286, height: 46)
@@ -23,9 +74,14 @@ enum OverlayLayout {
 @MainActor
 final class OverlayController {
     private var panel: NSPanel?
-    private var activeScreen: NSScreen?
+    private weak var model: AppModel?
+    private var activeDisplayID: CGDirectDisplayID?
+    private var workspaceObservers: [NSObjectProtocol] = []
+    private var applicationObservers: [NSObjectProtocol] = []
+    private var trackingTimer: Timer?
 
     func show(model: AppModel) {
+        self.model = model
         if panel == nil {
             let panel = NSPanel(contentRect: .zero, styleMask: [.nonactivatingPanel, .borderless],
                                 backing: .buffered, defer: false)
@@ -33,32 +89,152 @@ final class OverlayController {
             panel.isOpaque = false
             panel.backgroundColor = .clear
             panel.hasShadow = true
-            panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+            panel.hidesOnDeactivate = false
+            panel.isMovable = false
+            panel.collectionBehavior = [.canJoinAllSpaces, .canJoinAllApplications, .ignoresCycle]
             panel.contentView = NSHostingView(rootView: OverlayView(model: model))
             self.panel = panel
         }
-        if activeScreen == nil { activeScreen = screenUnderPointer() ?? NSScreen.main }
-        resizeAndPosition(model.settings.overlayPosition)
+        let wasVisible = panel?.isVisible == true
+        if !wasVisible { activeDisplayID = nil }
+        refreshTargetScreen(animateWithinDisplay: wasVisible)
         panel?.orderFrontRegardless()
+        startTracking()
     }
 
     func update(model: AppModel) { show(model: model) }
 
     func hide() {
+        stopTracking()
         panel?.orderOut(nil)
-        activeScreen = nil
+        activeDisplayID = nil
+        model = nil
     }
 
-    private func resizeAndPosition(_ position: OverlayPosition) {
-        guard let screen = activeScreen ?? NSScreen.main, let panel else { return }
+    private func resizeAndPosition(_ position: OverlayPosition, on screen: NSScreen,
+                                   animateWithinDisplay: Bool) {
+        guard let panel else { return }
+        let targetDisplayID = Self.displayID(for: screen)
         let target = OverlayLayout.frame(position: position, visibleFrame: screen.visibleFrame)
-        panel.setContentSize(target.size)
-        panel.setFrameOrigin(target.origin)
+        let sameDisplay = targetDisplayID != nil && targetDisplayID == activeDisplayID
+        activeDisplayID = targetDisplayID
+        guard !panel.frame.approximatelyEquals(target) else { return }
+        if animateWithinDisplay && sameDisplay {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.16
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                panel.animator().setFrame(target, display: true)
+            }
+        } else {
+            panel.setFrame(target, display: true)
+        }
+    }
+
+    private func refreshTargetScreen(animateWithinDisplay: Bool) {
+        guard let model, let panel else { return }
+        let screen = resolveTargetScreen() ?? NSScreen.main
+        guard let screen else { return }
+        resizeAndPosition(model.settings.overlayPosition, on: screen,
+                          animateWithinDisplay: animateWithinDisplay)
+        if panel.isVisible { panel.orderFrontRegardless() }
+    }
+
+    private func resolveTargetScreen() -> NSScreen? {
+        let screens = NSScreen.screens
+        let displays = screens.compactMap { screen -> OverlayDisplaySnapshot? in
+            guard let id = Self.displayID(for: screen) else { return nil }
+            return OverlayDisplaySnapshot(id: id, frame: CGDisplayBounds(id))
+        }
+        let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let resolvedID = OverlayScreenResolver.displayID(
+            frontmostPID: frontmostPID,
+            currentDisplayID: activeDisplayID,
+            windows: Self.visibleWindows(), displays: displays
+        )
+        if let resolvedID,
+           let screen = screens.first(where: { Self.displayID(for: $0) == resolvedID }) {
+            return screen
+        }
+        return screenUnderPointer() ?? screens.first(where: {
+            Self.displayID(for: $0) == activeDisplayID
+        }) ?? NSScreen.main
+    }
+
+    private func startTracking() {
+        guard trackingTimer == nil else { return }
+        let workspaceCenter = NSWorkspace.shared.notificationCenter
+        for name in [NSWorkspace.activeSpaceDidChangeNotification,
+                     NSWorkspace.didActivateApplicationNotification] {
+            workspaceObservers.append(workspaceCenter.addObserver(
+                forName: name, object: nil, queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.refreshTargetScreen(animateWithinDisplay: true)
+                }
+            })
+        }
+        applicationObservers.append(NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refreshTargetScreen(animateWithinDisplay: true)
+            }
+        })
+        let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refreshTargetScreen(animateWithinDisplay: true)
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        trackingTimer = timer
+    }
+
+    private func stopTracking() {
+        trackingTimer?.invalidate()
+        trackingTimer = nil
+        let workspaceCenter = NSWorkspace.shared.notificationCenter
+        workspaceObservers.forEach(workspaceCenter.removeObserver)
+        workspaceObservers.removeAll()
+        applicationObservers.forEach(NotificationCenter.default.removeObserver)
+        applicationObservers.removeAll()
     }
 
     private func screenUnderPointer() -> NSScreen? {
         let point = NSEvent.mouseLocation
         return NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) }
+    }
+
+    private static func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
+        (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+    }
+
+    private static func visibleWindows() -> [OverlayWindowSnapshot] {
+        guard let list = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID
+        ) as? [[String: Any]] else { return [] }
+        return list.compactMap { info in
+            guard let ownerPID = info[kCGWindowOwnerPID as String] as? NSNumber,
+                  let layer = info[kCGWindowLayer as String] as? NSNumber,
+                  let boundsDictionary = info[kCGWindowBounds as String] as? NSDictionary else {
+                return nil
+            }
+            var bounds = CGRect.zero
+            guard CGRectMakeWithDictionaryRepresentation(boundsDictionary as CFDictionary, &bounds) else {
+                return nil
+            }
+            return OverlayWindowSnapshot(ownerPID: ownerPID.int32Value,
+                                         layer: layer.intValue, bounds: bounds)
+        }
+    }
+}
+
+private extension NSRect {
+    func approximatelyEquals(_ other: NSRect, tolerance: CGFloat = 0.5) -> Bool {
+        abs(origin.x - other.origin.x) <= tolerance
+            && abs(origin.y - other.origin.y) <= tolerance
+            && abs(size.width - other.size.width) <= tolerance
+            && abs(size.height - other.size.height) <= tolerance
     }
 }
 
@@ -189,7 +365,7 @@ private struct CompactWaveform: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: 28)
-        .animation(.easeOut(duration: 0.1), value: levels)
+        .animation(.linear(duration: 0.06), value: levels)
         .accessibilityLabel("Canlı mikrofon ses seviyesi")
     }
 }
@@ -205,7 +381,7 @@ private struct LiveWaveform: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: 42)
-        .animation(.easeOut(duration: 0.1), value: levels)
+        .animation(.linear(duration: 0.06), value: levels)
         .accessibilityLabel("Canlı mikrofon ses seviyesi")
     }
 }

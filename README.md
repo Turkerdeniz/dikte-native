@@ -11,11 +11,13 @@ Dikte Native, Türker'in Apple Silicon MacBook'u için yazılmış yerel bir mac
 
 1. Menü çubuğunda Dikte'nin açık olduğunu doğrula.
 2. `⌥D` tuşlarına bas. Gösterge önce **Mikrofon hazırlanıyor**, ilk gerçek ses paketi geldikten sonra **Dinliyorum** durumuna geçer.
-3. Konuş. Dalga yalnız mikrofondan ölçülen gerçek ses seviyesiyle hareket eder.
+3. Konuş. Dalga yalnız mikrofondan ölçülen gerçek ses seviyesiyle, yumuşatılmış 30 FPS görünümde hareket eder.
 4. Kaydı bitirmek için tekrar `⌥D` kullan.
 5. Sonuç panoya kopyalanır. Accessibility izni varsa daha önce odakta olan uygulamaya otomatik yapıştırılır.
 
 Kısayol Ayarlar'dan değiştirilebilir. Yeni kombinasyon kaydedilemezse eski çalışan kısayol korunur.
+
+Kayıt göstergesi aktif macOS Space'ini ve odakta çalışılan uygulama penceresinin fiziksel ekranını otomatik izler. Ekran bilgisi alınamazsa imlecin bulunduğu ekrana düşer; bunun için Accessibility veya Screen Recording izni gerekmez.
 
 ## Kısa ve uzun kayıt ayrımı
 

@@ -18,7 +18,8 @@ Build script aynı paketi release build'den önce otomatik çalıştırır. Test
 - Codex JSON event/thread parser
 - Codex developer düzenleme sözleşmesi, JSON veri sınırı ve eski thread'in tek seferlik migrasyonu
 - tek kullanımlık Whisper tanı işareti, WAV süre/başlık doğrulaması, History bağlantısı ve güvenli tanı silme sınırı
-- overlay boyut/konum politikası
+- overlay boyut/konum, negatif ekran koordinatları ve ön pencerenin ekran çoğunluğu politikası
+- waveform attack/release, sınırlandırma, sessizliğe dönüş ve kayıtlar arası reset
 - CPU/RAM/disk tanı snapshot'ı
 - memory-pressure actor köprüsü ve model bırakma politikası
 - idle model release timer'ının çalışması, iptali ve yeni kayıtla değiştirilmesi
@@ -68,6 +69,9 @@ Dry-run öncesi ve sonrası `/Applications/Dikte.app` ile Application Support in
 | Kurtarılamayan parça | Otomatik yapıştırma yok; kısmi metin panoda/History'de `incomplete` |
 | Accessibility kapalı | Transkripsiyon/pano çalışır, yalnız Cmd+V yapılmaz |
 | Uygulama ikinci kez açılır | İkinci süreç yerine mevcut Settings öne gelir |
+| Space veya ön uygulama ekranı değişir | Overlay en geç 300 ms içinde aktif hedefe geçer; yalnız imleç hareketi normal durumda taşımaz |
+| Tam ekran/Stage Manager | Overlay aktif uygulama yanında görünür kalır |
+| Ekran çıkarılır | Overlay kalan ana ekrana güvenli biçimde taşınır |
 
 ## Crash ve bellek baskısı
 

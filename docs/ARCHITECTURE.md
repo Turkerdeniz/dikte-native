@@ -45,6 +45,12 @@ Uygulamanın tek bir ana durumu vardır:
 
 İlk paket gelmeden `recording` gösterilmez. Kayıt animasyonu bu nedenle oturumun açıldığına değil, mikrofondan veri geldiğine kanıttır.
 
+## Overlay ve ekran takibi
+
+Non-activating overlay, Core Graphics pencere listesindeki frontmost uygulama PID'si ve pencere sınırlarıyla hedef fiziksel ekranı çözer. Pencerenin çoğunluğu başka ekrana geçmeden overlay taşınmaz. Bilgi alınamazsa imleç ekranı, ardından `NSScreen.main` kullanılır. Space, uygulama ve ekran değişiklikleri olayla; pencerenin monitörler arasında sürüklenmesi yalnız overlay görünürken 250 ms aralıkla izlenir. Overlay gizlenince bütün gözlemciler ve timer durur.
+
+Gerçek RMS sunum seviyesi 30 Hz teslim edilir; `0.55` attack, `0.25` release ve `0.01` sessizlik tabanlı filtre hem kompakt hem geniş dalgayı besler. Filtre kayıt başında ve `idle` dönüşünde sıfırlanır.
+
 ## Ses yakalama
 
 `AudioRecorder` yerleşik MacBook mikrofonunu `AVCaptureDevice` kimliğiyle bulur. Bluetooth kulaklık veya Continuity Camera mikrofonuna sessiz fallback yapmaz ve macOS'un sistem genelindeki giriş aygıtını değiştirmez.

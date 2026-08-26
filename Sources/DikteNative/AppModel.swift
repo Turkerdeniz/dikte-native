@@ -48,6 +48,7 @@ final class AppModel: ObservableObject {
     private var pendingMemoryRelease = false
     private var activeDiagnosticCapture = false
     private var diagnosticCaptureArm = OneShotDiagnosticCaptureArm()
+    private var audioLevelSmoother = AudioLevelSmoother()
     private let breadcrumbStore = CrashBreadcrumbStore()
     private let overlay = OverlayController()
     private static let lifecycleLog = Logger(subsystem: "com.turkerdenizer.dikte.native", category: "Lifecycle")
@@ -104,6 +105,7 @@ final class AppModel: ObservableObject {
                                   memoryPressureLevel: memoryPressureLevel)
             performanceTracker = PerformanceTracker()
             performanceTracker?.begin("Kayıt")
+            audioLevelSmoother.reset()
             audioLevels = [Float](repeating: 0, count: 34)
             phase = .arming(startedAt: startedAt, attempt: 1)
             overlay.show(model: self)
@@ -439,7 +441,7 @@ final class AppModel: ObservableObject {
     private func receiveAudioLevel(_ level: Float) {
         guard isRecording else { return }
         audioLevels.removeFirst()
-        audioLevels.append(level)
+        audioLevels.append(audioLevelSmoother.update(level))
     }
 
     private func beginCapture(restarting: Bool) async throws {
@@ -682,6 +684,7 @@ final class AppModel: ObservableObject {
         performanceTracker = nil
         processingTask = nil
         activeDiagnosticCapture = false
+        audioLevelSmoother.reset()
         phase = .idle
         overlay.hide()
         breadcrumbStore.clear()
