@@ -2,6 +2,13 @@
 
 Bu dosya kullanıcıya ve bakım yapan geliştiriciye dönük önemli değişiklikleri özetler. Ayrıntılı teknik davranış için `docs/` belgelerine bak.
 
+## Çalışma ağacı — Coding Dictation — 31 Ağustos 2026
+
+- Sabit `⌥E` ile mevcut General `⌥D` akışından ayrı Coding mode eklendi; General'ın süreye bağlı `>30.0 saniye` Codex yönlendirmesi korundu.
+- Coding mode her kayıt süresinde ayrı kalıcı Codex thread'ine gider ve ayrı prompt compiler sözleşmesiyle yalnız yapılandırılmış nihai coding prompt üretir.
+- Capture mode overlay'de metin badge'leri kaldırıldı; General turuncu, Coding kırmızı dot ile ayırt edilir. Bildirim, History ve eski kayıt/thread ayarları geriye dönük uyumludur.
+- `⌥E` kaydı başarısız olursa General kısayolu çalışmaya devam eder; doğrulanmış bundle `/Applications/Dikte.app` olarak kuruldu ve eski bundle Çöp'e taşındı.
+
 ## 1.1.2-local aday — 26 Ağustos 2026
 
 - CoreAudio seviye teslimi tek slotlu bounded kanala taşındı; MainActor görev birikmesi kaldırıldı.

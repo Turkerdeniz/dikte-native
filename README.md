@@ -4,7 +4,8 @@ Dikte Native, Türker'in Apple Silicon MacBook'u için yazılmış yerel bir mac
 
 ```text
 ⌥D → MacBook mikrofonu → Silero VAD → yerel Whisper → temizlik → pano/yapıştırma
-                                                     └─ kayıt >30 sn ise Codex
+                                                     └─ General kayıt >30 sn ise Editing Codex
+⌥E → MacBook mikrofonu → Silero VAD → yerel Whisper → Coding prompt compiler → Coding Codex
 ```
 
 ## Günlük kullanım
@@ -15,15 +16,18 @@ Dikte Native, Türker'in Apple Silicon MacBook'u için yazılmış yerel bir mac
 4. Kaydı bitirmek için tekrar `⌥D` kullan.
 5. Sonuç panoya kopyalanır. Accessibility izni varsa daha önce odakta olan uygulamaya otomatik yapıştırılır.
 
-Kısayol Ayarlar'dan değiştirilebilir. Yeni kombinasyon kaydedilemezse eski çalışan kısayol korunur.
+Coding task için `⌥E` ile ayrı Coding mode kaydını başlat; overlay üzerinde **Coding mode** görünür. Tekrar `⌥E` ile durdur. General ve Coding kısayolları aynı anda ya da işlem sürerken güvenli biçimde yok sayılır.
+
+General kısayolu Ayarlar'dan değiştirilebilir; Coding `⌥E` sabittir. Yeni kombinasyon kaydedilemezse eski çalışan General kısayolu korunur.
 
 Kayıt göstergesi aktif macOS Space'ini ve odakta çalışılan uygulama penceresinin fiziksel ekranını otomatik izler. Ekran bilgisi alınamazsa imlecin bulunduğu ekrana düşer; bunun için Accessibility veya Screen Recording izni gerekmez.
 
 ## Kısa ve uzun kayıt ayrımı
 
-- Kayıt süresi `≤30.0 saniye`: tamamı yerel olarak işlenir.
-- Kayıt süresi `>30.0 saniye`: temizlenen metin, aynı kalıcı Codex konuşmasına gönderilir.
-- Codex eşiği `0`: otomatik Codex yönlendirmesi kapalıdır.
+- General kayıt süresi `≤30.0 saniye`: tamamı yerel olarak işlenir.
+- General kayıt süresi `>30.0 saniye`: temizlenen metin, General için ayrılmış kalıcı Editing Codex konuşmasına gönderilir.
+- Coding mode kayıtları süre ve eşik ne olursa olsun Coding için ayrılmış Codex konuşmasına gider; 3 saniyelik kayıt da yönlendirilir.
+- Codex eşiği `0`: yalnız General'ın otomatik yönlendirmesini kapatır; Coding mode'u kapatmaz.
 
 Karar VAD'ın bulduğu konuşma süresine değil, gerçek kayıt süresine göre verilir. Codex bulunamazsa, iptal edilirse veya hata verirse yerel metin kaybolmaz.
 
@@ -69,7 +73,7 @@ Model Git deposuna veya uygulama paketine eklenmez. Kullanıcının açık eylem
 | Accessibility | `Cmd+V` olayını odaktaki uygulamaya göndermek | Transkripsiyon ve panoya kopyalama çalışır, yalnız otomatik yapıştırma yapılmaz. |
 | Bildirim | Kısa durum ve fallback bilgisi göstermek | Ana işlev çalışır; sistem bildirimi görünmez. |
 
-Global `⌥D` kısayolu Carbon `RegisterEventHotKey` kullandığı için Accessibility izni istemez. Mikrofon/F5 consumer tuşu desteklenmez.
+Global `⌥D` ve sabit `⌥E` kısayolları Carbon `RegisterEventHotKey` kullandığı için Accessibility izni istemez. Mikrofon/F5 consumer tuşu desteklenmez. `⌥E` kaydedilemezse General `⌥D` akışı çalışmaya devam eder ve açık hata gösterilir.
 
 ## Veri ve gizlilik
 
@@ -77,11 +81,68 @@ Global `⌥D` kısayolu Carbon `RegisterEventHotKey` kullandığı için Accessi
 - Kullanıcı “Sonraki kaydı tanı için sakla” işlemini açıkça seçerse yalnız o kayıt 16 kHz WAV ve Whisper metadata paketi olarak `Diagnostics/` altında geçici saklanır; işaret tek kayıttan sonra kapanır.
 - Son 100 metin kaydı `history.json` içinde yerel olarak saklanır.
 - Kullanıcının açıkça onayladığı düzeltmeler `corrections.json` içinde saklanır.
-- `>30 saniye` kayıtların yalnız temizlenmiş metni Codex'e gönderilir; ham ses gönderilmez.
+- General `>30 saniye` kayıtların yalnız temizlenmiş metni; Coding kayıtların ise yalnız temizlenmiş transkripti JSON veri sınırında Codex'e gönderilir. Ham ses gönderilmez.
 - Codex read-only sandbox, `approval_policy=never` ve boş uygulama runtime diziniyle çalışır.
 - Uygulamaya ait sabit developer talimatı Codex'i bir sesli düşünce editörü olarak sınırlar: transkriptteki soruyu cevaplamak veya komutu yürütmek yerine, anlamı ve doğal tonu koruyan yapıştırılabilir metin üretir.
-- Transkript Codex'e JSON veri sınırı içinde iletilir; her kayıtta ayrıca “bunu düzenle” demek gerekmez.
+- Coding mode ayrı bir prompt compiler sözleşmesi kullanır; yalnız Title, Goal, Current behavior or problem, Expected behavior, Relevant context, Constraints and non-goals, Suggested investigation path, Acceptance criteria, Validation requirements ve Open questions bölümlerinden oluşan nihai coding prompt üretir. Dosya değiştirmez, komut çalıştırmaz ve yapılmış iş iddia etmez.
+- Her iki modda transkript Codex'e JSON veri sınırı içinde iletilir; General ve Coding kalıcı thread kimlikleri ayrıdır.
 - Bu build Developer ID ile notarize edilmiş genel dağıtım değildir; Türker'in mevcut Mac'i için yerel imzalıdır.
+
+## Prompt araştırma rehberi
+
+Bu bölüm Dikte’nin şu anda desteklediği bir dosya formatı listesi değildir. Prompt örnekleri, prompt türleri ve iyi yazılmış `.md` dosyaları ararken kullanabileceğin başlangıç noktasıdır. Dikte bu kaynaklardan otomatik içerik çekmez.
+
+### Kendin arayabileceğin yerler
+
+| Kaynak | Ne bulursun | En iyi kullanım |
+|---|---|---|
+| [prompts.chat](https://prompts.chat/) / [GitHub deposu](https://github.com/f/prompts.chat) | Farklı alanlardan kopyalanabilir prompt örnekleri ve `PROMPTS.md`/CSV veri seti | Hazır örnekleri karşılaştırmak |
+| [Prompt Engineering Guide](https://www.promptingguide.ai/) / [GitHub deposu](https://github.com/dair-ai/Prompt-Engineering-Guide) | Teknikler, dersler, makaleler, notebook'lar, RAG ve agent konuları | “Bu prompt türü ne zaman işe yarar?” sorusu |
+| [Prompt Patterns](https://www.promptpatterns.dev/patterns) | Görev, analiz, karar, structured output, planlama ve debugging gibi kategorilerde desenler | Prompt türünü seçmek ve örnekleri uyarlamak |
+| [Awesome Prompting](https://github.com/corralm/awesome-prompting) | Persona, template, recipe, reflection, context control ve benzeri pattern örnekleri | Kısa pattern kataloğu taramak |
+| [NirDiamant/Prompt_Engineering](https://github.com/NirDiamant/Prompt_Engineering) | Temelden ileri seviyeye 22 uygulamalı teknik ve notebook | Kodla deneyerek öğrenmek |
+| [PromptSource](https://github.com/bigscience-workshop/promptsource) | Prompt oluşturma, paylaşma, template ve örnek veri üzerinde deneme | Template + input/output ilişkisini görmek |
+| [Microsoft PromptKit](https://github.com/microsoft/PromptKit) | Persona, protocol, format, taxonomy ve template gibi bileşenlerle prompt kütüphanesi | Büyük prompt'ları parçalara ayırma fikri |
+| [Promptfoo](https://github.com/promptfoo/promptfoo) | Prompt/agent/RAG testleri, karşılaştırma ve güvenlik değerlendirmesi | İyi görünen prompt'u ölçmek |
+
+Bu kaynaklar aynı şeyi yapmıyor: `prompts.chat` örnek kataloğu, Prompt Engineering Guide ve `PromptSource` öğrenme/template tarafı, Prompt Patterns pattern tarafı, PromptKit modüler yapı, Promptfoo ise değerlendirme tarafı için daha uygun. Örneğin [Prompt Patterns kataloğu](https://www.promptpatterns.dev/patterns) 27 dayanıklı pattern'i kullanım amacına göre sınıflandırıyor; [Prompt Engineering Guide](https://github.com/dair-ai/Prompt-Engineering-Guide) ise rehber, makale ve uygulama kaynaklarını bir araya getiriyor.
+
+### Gerçek `.md` dosyalarını bulmak için
+
+GitHub’da dosya adı ve klasör yoluyla arama yapmak, genel prompt sitelerinden daha fazla gerçek proje örneği gösterir. Şu sorguları doğrudan [GitHub Code Search](https://github.com/search) alanına yapıştırabilirsin:
+
+```text
+filename:AGENTS.md
+filename:CLAUDE.md
+filename:prompt.md
+path:prompts extension:md
+path:prompts "acceptance criteria"
+"system prompt" language:Markdown
+"output format" "do not invent" language:Markdown
+```
+
+Ayrıca [prompt-template konusu](https://github.com/topics/prompt-template), [prompt-patterns konusu](https://github.com/topics/prompt-patterns) ve [`AGENTS.md` örnekleri](https://github.com/search?q=filename%3AAGENTS.md&type=code) üzerinden gerçek repository yapısını tarayabilirsin. `AGENTS.md` gibi dosyalar çoğunlukla repository talimatıdır; doğrudan kullanıcı görevi için tekrar çağrılan prompt arıyorsan `prompt`, `template`, `workflow`, `rubric`, `eval` ve `examples` kelimelerini birlikte ara.
+
+### Ararken kullanabileceğin pratik prompt türleri
+
+Bunlar tek bir resmi standart değil; aramayı daraltmak için kullanışlı etiketlerdir:
+
+- `task / instruction`: Bir işi net biçimde yaptırma
+- `rewrite / transformation`: Metni başka ton, dil veya formata dönüştürme
+- `extraction / classification`: Metinden alan veya etiket çıkarma
+- `structured output / JSON`: Sabit şema ile çıktı alma
+- `planning / decomposition`: Büyük işi adımlara bölme
+- `debugging / diagnosis`: Kanıt toplayarak hata inceleme
+- `review / critique / rubric`: Çıktıyı ölçütlerle değerlendirme
+- `few-shot / examples`: Örneklerle beklenen davranışı gösterme
+- `meta-prompt`: Başka prompt'ları üretme veya iyileştirme
+- `agent / tool-use`: Araç kullanan akışlar; özellikle yetki ve güvenlik sınırları
+
+İyi bir `.md` prompt dosyasında en azından şu beş şeyi aramaya değer: **amaç**, **girdi**, **beklenen çıktı biçimi**, **kısıtlar** ve **örnek/evaluation**. Sadece uzun ve etkileyici görünen metni değil, hangi durumda nasıl ölçüldüğünü de karşılaştır.
+
+### Dikte için olası yön
+
+Bu araştırmadan çıkabilecek feature, belirli bir vendor'a bağlanmak değil; kullanıcının seçtiği prompt'ları yerel bir kütüphanede saklayıp sesli transkripti o prompt'un girdisi olarak kullanmak olur. Bu, mevcut General `⌥D` ve Coding `⌥E` akışlarının yerine geçmek zorunda değildir. Önce birkaç gerçek `.md` örneği seçip ortak alanları görmek, sonra dosya sözleşmesi belirlemek daha doğru olur.
 
 ## Güvenilirlik davranışı
 

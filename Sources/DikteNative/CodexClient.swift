@@ -2,6 +2,25 @@
 
 struct CodexResult: Sendable { let text: String; let threadID: String }
 
+enum CodexPromptKind: Sendable {
+    case editing
+    case coding
+
+    var userPrompt: (String) -> String {
+        switch self {
+        case .editing: CodexEditingPrompt.userPrompt
+        case .coding: CodexCodingPrompt.userPrompt
+        }
+    }
+
+    var developerConfigurationOverride: String {
+        switch self {
+        case .editing: CodexEditingPrompt.developerConfigurationOverride
+        case .coding: CodexCodingPrompt.developerConfigurationOverride
+        }
+    }
+}
+
 struct CodexEventParser: Sendable {
     private(set) var threadID: String?
     private(set) var messages: [String] = []
@@ -31,17 +50,18 @@ actor CodexClient {
         return nil
     }
 
-    func ask(transcript: String, existingThreadID: String?, onThreadStarted: @escaping @Sendable (String) -> Void) async throws -> CodexResult {
+    func ask(transcript: String, existingThreadID: String?, promptKind: CodexPromptKind = .editing,
+             onThreadStarted: @escaping @Sendable (String) -> Void) async throws -> CodexResult {
         guard let executable = Self.executableURL() else { throw DikteError.codexUnavailable }
         try FileManager.default.createDirectory(at: AppPaths.codexRuntime, withIntermediateDirectories: true)
         let process = Process(); let stdout = Pipe(); let stderr = Pipe()
         process.executableURL = executable; process.currentDirectoryURL = AppPaths.codexRuntime
         process.standardOutput = stdout; process.standardError = stderr
-        let prompt = CodexEditingPrompt.userPrompt(transcript: transcript)
+        let prompt = promptKind.userPrompt(transcript)
         var arguments = ["exec"]
         if let existingThreadID { arguments += ["resume", existingThreadID] }
         arguments += [
-            "-c", CodexEditingPrompt.developerConfigurationOverride,
+            "-c", promptKind.developerConfigurationOverride,
             "-c", "sandbox_mode=\"read-only\"", "-c", "approval_policy=\"never\"",
             "--strict-config", "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check", "--json", "--color", "never", prompt
         ]

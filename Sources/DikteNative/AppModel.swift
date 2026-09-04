@@ -21,6 +21,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var lastAudioDiagnostics: AudioDiagnostics?
     @Published private(set) var isMicrophoneTest = false
     @Published private(set) var diagnosticCaptureArmed = false
+    @Published private(set) var captureMode: CaptureMode = .general
 
     let settings = AppSettings()
     let history = HistoryStore()
@@ -49,6 +50,7 @@ final class AppModel: ObservableObject {
     private var pendingMemoryRelease = false
     private var activeDiagnosticCapture = false
     private var diagnosticCaptureArm = OneShotDiagnosticCaptureArm()
+    private var isStartingCapture = false
     private var audioLevelSink: AudioLevelSink?
     private let breadcrumbStore = CrashBreadcrumbStore()
     private let overlay = OverlayController()
@@ -58,7 +60,17 @@ final class AppModel: ObservableObject {
         recoverUnexpectedCrash()
         removeLegacyAccurateModel()
         loginAtStartup = SMAppService.mainApp.status == .enabled
-        do { try installHotKey(settings.hotKey) } catch { alertMessage = error.localizedDescription }
+        if settings.hotKey.matchesShortcut(.optionE) {
+            settings.hotKey = .optionD
+            alertMessage = "General kısayolu ⌥E ile çakıştığı için ⌥D’ye alındı; ⌥E Coding mode için sabittir."
+        }
+        do {
+            if try !installHotKeys(settings.hotKey) {
+                alertMessage = "Coding mode kısayolu (⌥E) kaydedilemedi. General kısayolu çalışmaya devam ediyor."
+            }
+        } catch {
+            alertMessage = error.localizedDescription
+        }
         Task { try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) }
         configureMemoryPressureHandling()
     }
@@ -78,24 +90,49 @@ final class AppModel: ObservableObject {
 
     func startRecording() async {
         isMicrophoneTest = false
-        await startCapture(maximumDuration: settings.maximumRecording)
+        await startCapture(maximumDuration: settings.maximumRecording, mode: .general)
+    }
+
+    private func handleHotKey(_ mode: CaptureMode) {
+        switch CaptureHotKeyPolicy.action(for: phase, activeMode: captureMode,
+                                          requestedMode: mode, isStarting: isStartingCapture) {
+        case .start(let mode):
+            Task { await startRecording(mode: mode) }
+        case .stop:
+            stopRecording()
+        case .ignore:
+            break
+        }
+    }
+
+    private func startRecording(mode: CaptureMode) async {
+        isMicrophoneTest = false
+        await startCapture(maximumDuration: settings.maximumRecording, mode: mode)
     }
 
     func startMicrophoneTest() {
-        guard phase == .idle else {
+        guard phase == .idle, !isStartingCapture else {
             if isMicrophoneTest && isCapturing { stopRecording() }
             return
         }
         isMicrophoneTest = true
-        Task { await startCapture(maximumDuration: 5) }
+        Task { await startCapture(maximumDuration: 5, mode: .general) }
     }
 
-    private func startCapture(maximumDuration: TimeInterval) async {
-        guard phase == .idle else { return }
+    private func startCapture(maximumDuration: TimeInterval, mode: CaptureMode) async {
+        guard phase == .idle, !isStartingCapture else { return }
+        isStartingCapture = true
+        captureMode = mode
         let microphoneGranted = await recorder.requestPermission()
         microphonePermission = AVCaptureDevice.authorizationStatus(for: .audio)
+        guard phase == .idle, isStartingCapture else {
+            isStartingCapture = false
+            return
+        }
         guard microphoneGranted else {
+            isStartingCapture = false
             isMicrophoneTest = false
+            captureMode = .general
             alertMessage = "Mikrofon izni verilmedi. General bölümündeki Mikrofon İzni düğmesinden Sistem Ayarları’nı açabilirsin."
             return
         }
@@ -110,6 +147,11 @@ final class AppModel: ObservableObject {
             phase = .arming(startedAt: startedAt, attempt: 1)
             overlay.show(model: self)
             try await beginCapture(restarting: false)
+            guard isCapturing else {
+                isStartingCapture = false
+                return
+            }
+            isStartingCapture = false
             activeDiagnosticCapture = diagnosticCaptureArm.consume(isMicrophoneTest: isMicrophoneTest)
             diagnosticCaptureArmed = diagnosticCaptureArm.isArmed
             scheduleArmingTimeout(startedAt: startedAt, attempt: 1)
@@ -122,8 +164,10 @@ final class AppModel: ObservableObject {
             }
             scheduleModelPreloadIfAllowed()
         } catch {
+            isStartingCapture = false
             isMicrophoneTest = false
             alertMessage = error.localizedDescription
+            captureMode = .general
             returnToIdle()
         }
     }
@@ -133,13 +177,14 @@ final class AppModel: ObservableObject {
         armingTimeoutTask?.cancel()
         maximumRecordingTask?.cancel()
         performanceTracker?.markProcessingStarted()
+        let mode = captureMode
         phase = .processing(.preparingAudio)
         overlay.update(model: self)
         processingTask = Task { [weak self] in
             guard let self else { return }
             let recording = await recorder.stop()
             guard !recording.samples.isEmpty else {
-                await recordCaptureFailure(recording, message: "\(recording.deviceName) seçildi fakat mikrofon 0 ses paketi üretti.")
+                await recordCaptureFailure(recording, message: "\(recording.deviceName) seçildi fakat mikrofon 0 ses paketi üretti.", mode: mode)
                 return
             }
             if isMicrophoneTest {
@@ -150,7 +195,7 @@ final class AppModel: ObservableObject {
                 returnToIdle()
                 return
             }
-            await process(recording: recording)
+            await process(recording: recording, mode: mode)
         }
     }
 
@@ -167,6 +212,7 @@ final class AppModel: ObservableObject {
 
     func shutdown() {
         hotKey.unregister(); recorder.stopImmediately(); modelStore.cancelDownload()
+        isStartingCapture = false
         armingTimeoutTask?.cancel(); maximumRecordingTask?.cancel()
         cancelModelPreload(); processingTask?.cancel(); modelReleaseTask?.cancel()
         modelIdleReleaseScheduler.cancel()
@@ -182,8 +228,21 @@ final class AppModel: ObservableObject {
     }
 
     func applyHotKey(_ candidate: HotKeyConfiguration) -> Bool {
-        do { try installHotKey(candidate); settings.hotKey = candidate; return true }
-        catch { alertMessage = error.localizedDescription; return false }
+        guard !candidate.matchesShortcut(.optionE) else {
+            alertMessage = "General kısayolu ⌥E ile çakışamaz; ⌥E Coding mode için sabittir."
+            return false
+        }
+        do {
+            let codingRegistered = try installHotKeys(candidate)
+            settings.hotKey = candidate
+            if !codingRegistered {
+                alertMessage = "Coding mode kısayolu (⌥E) kaydedilemedi. General kısayolu çalışmaya devam ediyor."
+            }
+            return true
+        } catch {
+            alertMessage = error.localizedDescription
+            return false
+        }
     }
 
     func setLoginAtStartup(_ enabled: Bool) {
@@ -212,6 +271,10 @@ final class AppModel: ObservableObject {
     }
 
     func resetCodexConversation() { settings.codexThreadID = nil; pasteService.notify("Yeni Codex konuşması", "Bir sonraki uzun kayıt yeni bir konuşma başlatacak.") }
+    func resetCodingCodexConversation() {
+        settings.codingCodexThreadID = nil
+        pasteService.notify("Yeni Coding konuşması", "Bir sonraki coding kaydı yeni bir konuşma başlatacak.")
+    }
     func copyLastResult() { if let lastResult { _ = pasteService.copyAndOptionallyPaste(lastResult, shouldPaste: false) } }
     func copy(_ text: String) { _ = pasteService.copyAndOptionallyPaste(text, shouldPaste: false) }
     func toggleDiagnosticCapture() {
@@ -229,11 +292,13 @@ final class AppModel: ObservableObject {
     func deleteDiagnosticCapture(id: UUID) { Task { await diagnosticStore.delete(id: id) } }
     func deleteAllDiagnosticCaptures() { Task { await diagnosticStore.deleteAll() } }
 
-    private func installHotKey(_ configuration: HotKeyConfiguration) throws {
-        try hotKey.register(configuration) { [weak self] in self?.toggleRecording() }
+    private func installHotKeys(_ configuration: HotKeyConfiguration) throws -> Bool {
+        try hotKey.register(general: configuration, coding: .optionE) { [weak self] mode in
+            self?.handleHotKey(mode)
+        }
     }
 
-    private func process(recording: AudioCapture) async {
+    private func process(recording: AudioCapture, mode: CaptureMode) async {
         var diagnostics = recording.diagnostics
         var chunkDiagnostics: [ChunkTranscriptionDiagnostic] = []
         var vadRegions: [SpeechRegion] = []
@@ -376,7 +441,7 @@ final class AppModel: ObservableObject {
             }
             if hasUnresolvedChunk {
                 await finishIncomplete(recording, partialText: raw, diagnostics: diagnostics,
-                                       vadRegions: vadRegions, chunkDiagnostics: chunkDiagnostics)
+                                       vadRegions: vadRegions, chunkDiagnostics: chunkDiagnostics, mode: mode)
                 return
             }
 
@@ -385,22 +450,25 @@ final class AppModel: ObservableObject {
             let cleaned = TextCleaner.clean(raw)
             let localResult = cleaned
             var final = localResult; var response: String?; var codexError: String?
-            let useCodex = RoutePolicy.shouldUseCodex(duration: recording.duration, threshold: settings.codexThreshold)
+            let route = RoutePolicy.destination(for: mode, duration: recording.duration,
+                                                threshold: settings.codexThreshold)
+            let useCodex = route == .codex
             if useCodex {
                 performanceTracker?.begin("Codex")
                 setStage(.askingCodex)
                 do {
-                    let oldThreadID = settings.codexThreadID
+                    let oldThreadID = codexThreadID(for: mode)
                     let result: CodexResult
                     do {
-                        result = try await askCodex(localResult, threadID: oldThreadID)
+                        result = try await askCodex(localResult, threadID: oldThreadID, mode: mode)
                     } catch {
                         guard oldThreadID != nil, isMissingThreadError(error) else { throw error }
-                        settings.codexThreadID = nil
+                        setCodexThreadID(nil, for: mode)
                         pasteService.notify("Codex konuşması yenileniyor", "Eski konuşma bulunamadı; yeni konuşma açıldı.")
-                        result = try await askCodex(localResult, threadID: nil)
+                        result = try await askCodex(localResult, threadID: nil, mode: mode)
                     }
-                    settings.codexThreadID = result.threadID; response = result.text; final = result.text
+                    setCodexThreadID(result.threadID, for: mode)
+                    response = result.text; final = result.text
                 } catch {
                     codexError = error.localizedDescription
                 }
@@ -414,13 +482,14 @@ final class AppModel: ObservableObject {
             let wordsPerSecond = Double(raw.split(whereSeparator: \Character.isWhitespace).count) / max(0.001, detectedSpeechDuration)
             let charactersPerSecond = Double(raw.filter { !$0.isWhitespace }.count) / max(0.001, detectedSpeechDuration)
             let historyID = UUID()
-            let mode: HistoryMode = useCodex ? .autoAsk : .dictation
+            let historyMode: HistoryMode = useCodex ? .autoAsk : .dictation
             let diagnosticID = await persistDiagnosticIfNeeded(
-                recording: recording, historyEntryID: historyID, mode: mode,
+                recording: recording, historyEntryID: historyID, mode: historyMode,
                 diagnostics: diagnostics, vadRegions: vadRegions, chunkDiagnostics: chunkDiagnostics,
                 rawTranscript: raw, deterministicText: cleaned, finalText: final
             )
-            history.add(HistoryEntry(id: historyID, duration: recording.duration, mode: mode,
+            history.add(HistoryEntry(id: historyID, duration: recording.duration, mode: historyMode,
+                                     captureMode: mode,
                                      rawTranscript: raw, finalText: final, deterministicText: cleaned,
                                      localCorrectedText: nil, primaryConfidence: selected.meanTokenProbability,
                                      lowConfidenceTokenRatio: selected.lowConfidenceTokenRatio,
@@ -433,11 +502,11 @@ final class AppModel: ObservableObject {
         } catch is CancellationError {
             returnToIdle()
         } catch DikteError.noSpeech {
-            await finishWithoutSpeech(recording, diagnostics: diagnostics, vadRegions: vadRegions)
+            await finishWithoutSpeech(recording, diagnostics: diagnostics, vadRegions: vadRegions, mode: mode)
         } catch {
             await recordCaptureFailure(recording, message: error.localizedDescription,
                                        diagnostics: diagnostics, vadRegions: vadRegions,
-                                       chunkDiagnostics: chunkDiagnostics)
+                                       chunkDiagnostics: chunkDiagnostics, mode: mode)
         }
     }
 
@@ -476,11 +545,11 @@ final class AppModel: ObservableObject {
                     self.scheduleArmingTimeout(startedAt: startedAt, attempt: 2)
                 } catch {
                     let capture = await self.recorder.stop()
-                    await self.recordCaptureFailure(capture, message: error.localizedDescription)
+                    await self.recordCaptureFailure(capture, message: error.localizedDescription, mode: self.captureMode)
                 }
             } else {
                 let capture = await self.recorder.stop()
-                await self.recordCaptureFailure(capture, message: "MacBook mikrofonu iki denemede de ses paketi üretmedi.")
+                await self.recordCaptureFailure(capture, message: "MacBook mikrofonu iki denemede de ses paketi üretmedi.", mode: self.captureMode)
             }
         }
     }
@@ -488,7 +557,8 @@ final class AppModel: ObservableObject {
     private func recordCaptureFailure(_ capture: AudioCapture, message: String,
                                       diagnostics: AudioDiagnostics? = nil,
                                       vadRegions: [SpeechRegion] = [],
-                                      chunkDiagnostics: [ChunkTranscriptionDiagnostic] = []) async {
+                                      chunkDiagnostics: [ChunkTranscriptionDiagnostic] = [],
+                                      mode: CaptureMode? = nil) async {
         let effectiveDiagnostics = diagnostics ?? capture.diagnostics
         let detail = effectiveDiagnostics.summary
         lastAudioDiagnostics = effectiveDiagnostics
@@ -501,6 +571,7 @@ final class AppModel: ObservableObject {
             deterministicText: nil, finalText: message
         )
         history.add(HistoryEntry(id: historyID, duration: capture.duration, mode: .recordingError,
+                                 captureMode: mode,
                                  rawTranscript: "", finalText: message,
                                  deterministicText: nil, localCorrectedText: nil,
                                  audioDiagnostics: effectiveDiagnostics,
@@ -511,7 +582,7 @@ final class AppModel: ObservableObject {
     }
 
     private func finishWithoutSpeech(_ capture: AudioCapture, diagnostics: AudioDiagnostics,
-                                     vadRegions: [SpeechRegion]) async {
+                                     vadRegions: [SpeechRegion], mode: CaptureMode) async {
         lastAudioDiagnostics = diagnostics
         isMicrophoneTest = false
         let historyID = UUID()
@@ -521,19 +592,21 @@ final class AppModel: ObservableObject {
             rawTranscript: "", deterministicText: nil, finalText: "Ses yok."
         )
         history.add(HistoryEntry(id: historyID, duration: capture.duration, mode: .recordingError,
+                                 captureMode: mode,
                                  rawTranscript: "", finalText: "Ses yok.",
                                  deterministicText: nil, localCorrectedText: nil,
                                  audioDiagnostics: diagnostics,
                                  performanceDiagnostics: finishPerformance(),
                                  diagnosticCaptureID: diagnosticID))
-        pasteService.notify("Dikte", "Ses yok.")
+        pasteService.notify(notificationTitle(for: mode), "Ses yok.")
         returnToIdle()
     }
 
     private func finishIncomplete(_ capture: AudioCapture, partialText: String,
                                   diagnostics: AudioDiagnostics,
                                   vadRegions: [SpeechRegion],
-                                  chunkDiagnostics: [ChunkTranscriptionDiagnostic]) async {
+                                  chunkDiagnostics: [ChunkTranscriptionDiagnostic],
+                                  mode: CaptureMode) async {
         let cleaned = TextCleaner.clean(partialText)
         if !cleaned.isEmpty {
             lastResult = cleaned
@@ -548,13 +621,18 @@ final class AppModel: ObservableObject {
             deterministicText: cleaned, finalText: cleaned
         )
         history.add(HistoryEntry(id: historyID, duration: capture.duration, mode: .incomplete,
+                                 captureMode: mode,
                                  rawTranscript: partialText, finalText: cleaned,
                                  deterministicText: cleaned, localCorrectedText: nil,
                                  audioDiagnostics: diagnostics, chunkDiagnostics: chunkDiagnostics,
                                  performanceDiagnostics: performance,
                                  diagnosticCaptureID: diagnosticID))
-        pasteService.notify("Dikte", "Bir konuşma bölümü çözülemedi; bulunan metin panoda.")
+        pasteService.notify(notificationTitle(for: mode), "Bir konuşma bölümü çözülemedi; bulunan metin panoda.")
         returnToIdle()
+    }
+
+    private func notificationTitle(for mode: CaptureMode) -> String {
+        mode == .coding ? mode.title : "Dikte"
     }
 
     private func persistDiagnosticIfNeeded(
@@ -709,11 +787,13 @@ final class AppModel: ObservableObject {
         maximumRecordingTask?.cancel()
         performanceTracker = nil
         processingTask = nil
+        isStartingCapture = false
         activeDiagnosticCapture = false
         audioLevelSink = nil
         audioMeter.stop()
         phase = .idle
         overlay.hide()
+        captureMode = .general
         breadcrumbStore.clear()
 
         if MemoryPressurePolicy.shouldReleaseOnReturnToIdle(
@@ -750,10 +830,25 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func askCodex(_ text: String, threadID: String?) async throws -> CodexResult {
-        try await withTimeout(seconds: 120) {
-            try await self.codex.ask(transcript: text, existingThreadID: threadID) { id in
-                Task { @MainActor in self.settings.codexThreadID = id }
+    private func codexThreadID(for mode: CaptureMode) -> String? {
+        switch mode {
+        case .general: settings.codexThreadID
+        case .coding: settings.codingCodexThreadID
+        }
+    }
+
+    private func setCodexThreadID(_ threadID: String?, for mode: CaptureMode) {
+        switch mode {
+        case .general: settings.codexThreadID = threadID
+        case .coding: settings.codingCodexThreadID = threadID
+        }
+    }
+
+    private func askCodex(_ text: String, threadID: String?, mode: CaptureMode) async throws -> CodexResult {
+        let promptKind: CodexPromptKind = mode == .coding ? .coding : .editing
+        return try await withTimeout(seconds: 120) {
+            try await self.codex.ask(transcript: text, existingThreadID: threadID, promptKind: promptKind) { id in
+                Task { @MainActor in self.setCodexThreadID(id, for: mode) }
             }
         }
     }

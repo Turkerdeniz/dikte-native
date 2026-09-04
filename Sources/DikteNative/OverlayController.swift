@@ -327,11 +327,7 @@ private struct OverlayView: View {
 
     private var compactRecordingView: some View {
         HStack(spacing: 8) {
-            Circle()
-                .fill(model.isRecording ? .orange : .secondary)
-                .frame(width: 9, height: 9)
-                .shadow(color: model.isRecording ? .orange.opacity(0.7) : .clear, radius: 4)
-                .accessibilityLabel(recordingTitle)
+            modeIndicator
             CompactWaveform(levels: meter.levels)
             recordingTimer.frame(width: 42, alignment: .trailing)
             Button(action: model.stopRecording) {
@@ -347,6 +343,7 @@ private struct OverlayView: View {
 
     private var compactProcessingView: some View {
         HStack(spacing: 9) {
+            modeIndicator
             ProgressView().controlSize(.small).frame(width: 15, height: 15)
             Text(processingTitle).font(.caption.weight(.medium)).lineLimit(1)
             Spacer(minLength: 4)
@@ -366,8 +363,7 @@ private struct OverlayView: View {
 
     private var wideRecordingView: some View {
         HStack(spacing: 12) {
-            Circle().fill(model.isRecording ? .orange : .secondary).frame(width: 10, height: 10)
-                .shadow(color: model.isRecording ? .orange.opacity(0.7) : .clear, radius: 5)
+            modeIndicator
             VStack(alignment: .leading, spacing: 1) {
                 Text(recordingTitle).font(.caption.bold())
                 Text(model.recorder.builtInInputName).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
@@ -402,7 +398,7 @@ private struct OverlayView: View {
 
     private var wideProcessingView: some View {
         HStack(spacing: 12) {
-            Image(systemName: "ellipsis.circle.fill").font(.system(size: 25)).foregroundStyle(.blue)
+            modeIndicator
             VStack(alignment: .leading, spacing: 2) {
                 Text(processingTitle).font(.headline)
                 Text("İşlem iptal edilebilir").font(.caption).foregroundStyle(.secondary)
@@ -410,6 +406,22 @@ private struct OverlayView: View {
             Spacer()
             Button(action: model.cancel) { Image(systemName: "xmark") }.buttonStyle(.plain)
         }
+    }
+
+    private var modeIndicator: some View {
+        Circle()
+            .fill(modeColor.opacity(model.isCapturing && !model.isRecording ? 0.55 : 1))
+            .frame(width: 10, height: 10)
+            .shadow(color: model.isRecording ? modeColor.opacity(0.7) : .clear, radius: 4)
+            .accessibilityLabel(modeAccessibilityLabel)
+    }
+
+    private var modeColor: Color {
+        model.captureMode == .coding ? .red : .orange
+    }
+
+    private var modeAccessibilityLabel: String {
+        model.captureMode == .coding ? "Coding modu" : "General modu"
     }
 
     private var processingTitle: String {

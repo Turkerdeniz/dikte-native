@@ -11,6 +11,14 @@ CONTENTS="$APP_DIR/Contents"
 OUTPUT_ZIP="$BUILD_DIR/Dikte.app.zip"
 SWIFT_CACHE="/private/tmp/dikte-native-swift-cache"
 CLANG_CACHE="/private/tmp/dikte-native-clang-cache"
+WORKSPACE_STATE="$ROOT_DIR/.build/workspace-state.json"
+
+# SwiftPM stores the package root and binary-artifact path as absolute values.
+# A moved checkout otherwise keeps compiling against its former location.
+if [[ -f "$WORKSPACE_STATE" ]] && ! grep -Fq "\"location\" : \"$ROOT_DIR\"" "$WORKSPACE_STATE"; then
+  swift package --package-path "$ROOT_DIR" clean
+  rm -f "$WORKSPACE_STATE"
+fi
 
 security find-identity -v -p codesigning | rg -F "\"$IDENTITY\"" >/dev/null || {
   print -u2 "Required signing identity is missing: $IDENTITY"

@@ -10,6 +10,7 @@ final class AppSettings: ObservableObject {
         static let overlayPosition = "overlayPosition"
         static let codexThreshold = "codexThreshold"
         static let codexThreadID = "codexThreadID"
+        static let codingCodexThreadID = "codingCodexThreadID"
         static let migrationVersion = "migrationVersion"
     }
     private let defaults: UserDefaults
@@ -21,6 +22,7 @@ final class AppSettings: ObservableObject {
     @Published var overlayPosition: OverlayPosition { didSet { defaults.set(overlayPosition.rawValue, forKey: Key.overlayPosition) } }
     @Published var codexThreshold: Double { didSet { defaults.set(codexThreshold, forKey: Key.codexThreshold) } }
     @Published var codexThreadID: String? { didSet { defaults.set(codexThreadID, forKey: Key.codexThreadID) } }
+    @Published var codingCodexThreadID: String? { didSet { defaults.set(codingCodexThreadID, forKey: Key.codingCodexThreadID) } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -43,13 +45,19 @@ final class AppSettings: ObservableObject {
         } else {
             codexThreadID = defaults.string(forKey: Key.codexThreadID)
         }
+        if migrationVersion < 7 {
+            codingCodexThreadID = nil
+            defaults.removeObject(forKey: Key.codingCodexThreadID)
+        } else {
+            codingCodexThreadID = defaults.string(forKey: Key.codingCodexThreadID)
+        }
         if migrationVersion < 1 {
             defaults.set(codexThreshold, forKey: Key.codexThreshold)
         }
         defaults.removeObject(forKey: "smartCleanupEnabled")
         if migrationVersion < 5 { defaults.set(language.rawValue, forKey: Key.language) }
         if migrationVersion < 4 { defaults.set(overlayPosition.rawValue, forKey: Key.overlayPosition) }
-        defaults.set(6, forKey: Key.migrationVersion)
+        defaults.set(7, forKey: Key.migrationVersion)
     }
 
     private func save<T: Encodable>(_ value: T, key: String) {

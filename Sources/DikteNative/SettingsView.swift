@@ -102,10 +102,14 @@ private struct GeneralSettingsView: View {
                 }
                 SectionCard("Kısayol") {
                     HStack {
-                        Text("Global kısayol"); Spacer()
+                        Text("General kısayolu"); Spacer()
                         Button(settings.hotKey.displayName) { recordingHotKey = true }.keyboardShortcut(.none)
                     }
-                    Text("Varsayılan ⌥D. Mikrofon/F5 tuşu kullanılmaz ve Erişilebilirlik izni gerekmez.").font(.caption).foregroundStyle(.secondary)
+                    HStack {
+                        Text("Coding mode"); Spacer(); Text(HotKeyConfiguration.optionE.displayName).foregroundStyle(.secondary)
+                    }
+                    Text("Varsayılan General kısayolu ⌥D’dir. Coding mode için ⌥E sabittir; ikinci bir kısayol düzenleyicisi yoktur. Mikrofon/F5 tuşu kullanılmaz ve Erişilebilirlik izni gerekmez.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 SectionCard("Pano ve görünüm") {
                     Toggle("Sonucu otomatik yapıştır", isOn: $settings.automaticPaste)
@@ -268,6 +272,11 @@ private struct CodexSettingsView: View {
                 Text("Codex konuşmayı cevaplamaz; anlamı ve doğal tonu koruyarak doğrudan yapıştırılabilir metne dönüştürür.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Label("Coding prompt compiler etkin", systemImage: "chevron.left.forwardslash.chevron.right")
+                    .font(.caption)
+                Text("Coding mode, konuşmayı cevaplamadan yapılandırılmış bir coding prompt’una dönüştürür; dosya değiştirmez ve komut çalıştırmaz.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             SectionCard("Otomatik yönlendirme") {
                 HStack { Text("Eşik"); Spacer(); Text(settings.codexThreshold == 0 ? "Kapalı" : String(format: "%.1f saniye", settings.codexThreshold)).monospacedDigit() }
@@ -278,6 +287,11 @@ private struct CodexSettingsView: View {
             SectionCard("Kalıcı konuşma") {
                 Text(settings.codexThreadID.map { "Aktif: \($0)" } ?? "Henüz konuşma oluşturulmadı").textSelection(.enabled).lineLimit(2)
                 Button("Yeni konuşma", role: .destructive) { model.resetCodexConversation() }
+            }
+            SectionCard("Coding mode konuşması") {
+                Text(settings.codingCodexThreadID.map { "Aktif: \($0)" } ?? "Henüz coding konuşması oluşturulmadı")
+                    .textSelection(.enabled).lineLimit(2)
+                Button("Yeni coding konuşması", role: .destructive) { model.resetCodingCodexConversation() }
             }
             Spacer()
         }.padding(20)
@@ -300,7 +314,7 @@ private struct HistoryView: View {
             VStack(spacing: 0) {
                 List(store.entries, selection: $selection) { entry in
                     VStack(alignment: .leading, spacing: 3) {
-                        HStack { Text(modeTitle(entry.mode)).font(.caption).bold(); Spacer(); Text(entry.timestamp, style: .date).font(.caption2) }
+                        HStack { Text(modeTitle(entry)).font(.caption).bold(); Spacer(); Text(entry.timestamp, style: .date).font(.caption2) }
                         Text(entry.finalText).lineLimit(2); Text(String(format: "%.1f sn", entry.duration)).font(.caption2).foregroundStyle(.secondary)
                     }.tag(entry.id)
                 }
@@ -451,12 +465,15 @@ private struct HistoryView: View {
         }
     }
 
-    private func modeTitle(_ mode: HistoryMode) -> String {
-        switch mode {
-        case .dictation: "Dikte"
-        case .autoAsk: "Codex"
-        case .incomplete: "Eksik kayıt"
-        case .recordingError: "Kayıt hatası"
+    private func modeTitle(_ entry: HistoryEntry) -> String {
+        if let captureMode = entry.captureMode {
+            return captureMode == .coding ? "Coding" : "General"
+        }
+        switch entry.mode {
+        case .dictation: return "Dikte"
+        case .autoAsk: return "Codex"
+        case .incomplete: return "Eksik kayıt"
+        case .recordingError: return "Kayıt hatası"
         }
     }
 

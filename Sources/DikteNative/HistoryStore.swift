@@ -23,7 +23,8 @@ final class HistoryStore: ObservableObject {
         guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
         let old = entries[index]
         entries[index] = HistoryEntry(id: old.id, timestamp: old.timestamp, duration: old.duration,
-                                      mode: old.mode, rawTranscript: old.rawTranscript, finalText: text,
+                                      mode: old.mode, captureMode: old.captureMode,
+                                      rawTranscript: old.rawTranscript, finalText: text,
                                       deterministicText: old.deterministicText,
                                       localCorrectedText: old.localCorrectedText,
                                       accurateTranscript: old.accurateTranscript,

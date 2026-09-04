@@ -77,6 +77,22 @@ final class SpeechSegmenterTests: XCTestCase {
     }
 
     @MainActor
+    func testBundledVADModelResolvesFromStandardMacAppResources() throws {
+        let temporary = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        let resources = temporary.appendingPathComponent("Dikte.app/Contents/Resources", isDirectory: true)
+        let expected = resources
+            .appendingPathComponent("DikteNative_DikteNative.bundle", isDirectory: true)
+            .appendingPathComponent("ggml-silero-v6.2.0.bin")
+        try FileManager.default.createDirectory(
+            at: expected.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data().write(to: expected)
+
+        XCTAssertEqual(VADModelStore.locateBundledModel(searchRoots: [resources]), expected)
+    }
+
+    @MainActor
     func testBundledVADModelLoadsAndRejectsSilence() async throws {
         let url = try await VADModelStore().modelURL()
         let segmenter = SpeechSegmenter()

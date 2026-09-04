@@ -12,3 +12,4 @@ build-candidates/
 *.cer
 DerivedData/
 .DS_Store
+graphify-out/

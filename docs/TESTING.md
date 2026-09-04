@@ -16,7 +16,9 @@ Build script aynı paketi release build'den önce otomatik çalıştırır. Test
 - eksik parça/bütün kayıt fallback kararları
 - Türkçe ayar ve eski config migrasyonları
 - Codex JSON event/thread parser
-- Codex developer düzenleme sözleşmesi, JSON veri sınırı ve eski thread'in tek seferlik migrasyonu
+- General/Coding route policy sınırı, kısayol çakışması ve capture-mode geçişleri
+- Codex developer düzenleme sözleşmesi, Coding prompt compiler, JSON veri sınırı ve iki ayrı thread migrasyonu
+- Coding prompt'un yalnız gerekli bölümleri üretmesi, eksik bilgiyi uydurmaması ve debug sırasını koruması
 - tek kullanımlık Whisper tanı işareti, WAV süre/başlık doğrulaması, History bağlantısı ve güvenli tanı silme sınırı
 - overlay boyut/konum, negatif ekran koordinatları ve ön pencerenin ekran çoğunluğu politikası
 - waveform attack/release, sınırlandırma, sessizliğe dönüş ve kayıtlar arası reset
@@ -59,12 +61,16 @@ Dry-run öncesi ve sonrası `/Applications/Dikte.app` ile Application Support in
 | Senaryo | Beklenen sonuç |
 |---|---|
 | `⌥D`, 3–5 sn Türkçe | Yerel sonuç, panoya kopyalama ve izin varsa otomatik yapıştırma |
+| `⌥E`, 3 sn coding isteği | Süreden bağımsız Coding mode; ayrı Codex thread'ine yapılandırılmış coding prompt gönderilir |
+| `⌥E` ile kayıt sürerken `⌥D` | Karşı mod kaydı başlatılmaz/durdurulmaz; aktif kayıt korunur |
+| Codex işleme aşamasında `⌥D` veya `⌥E` | Kısayol yok sayılır; çalışan işlem kesilmez |
 | İlk cümle, 8–12 sn sessizlik, ikinci cümle | Her iki cümle sonuçta bulunur |
 | Yalnız sessizlik/müzik | Whisper çalışmaz; kısa “Ses algılanmadı” bildirimi |
 | Bluetooth kulaklık bağlı | Kayıt MacBook mikrofonundan; sistem giriş/çıkış seçimi değişmez |
 | `Codex`, `Whisper`, `Option D` içeren Türkçe | Doğrulanmış İngilizce terimler korunur |
 | Tam `30.0 sn` | Yerel pipeline |
 | `30.1 sn` ve üzeri | Kalıcı Codex thread; başarısızsa yerel fallback |
+| General kısayolu olarak `⌥E` kaydetme denemesi | Reddedilir; `⌥E` Coding mode için sabit kalır |
 | Boş Whisper parçası | Özgün aralıktan retry; gerekirse bütün kayıt fallback |
 | Kurtarılamayan parça | Otomatik yapıştırma yok; kısmi metin panoda/History'de `incomplete` |
 | Accessibility kapalı | Transkripsiyon/pano çalışır, yalnız Cmd+V yapılmaz |
@@ -72,6 +78,8 @@ Dry-run öncesi ve sonrası `/Applications/Dikte.app` ile Application Support in
 | Space veya ön uygulama ekranı değişir | Overlay en geç 300 ms içinde aktif hedefe geçer; yalnız imleç hareketi normal durumda taşımaz |
 | Tam ekran/Stage Manager | Overlay aktif uygulama yanında görünür kalır |
 | Ekran çıkarılır | Overlay kalan ana ekrana güvenli biçimde taşınır |
+
+Hoparlör sesi veya audio loopback gerekmez; otomatik testler sentetik/sessizlik verisiyle çalışır. Gerçek mikrofondan `⌥D` ve `⌥E` manuel testi uygun fiziksel ortam bulunduğunda yapılmalıdır.
 
 ## Crash ve bellek baskısı
 

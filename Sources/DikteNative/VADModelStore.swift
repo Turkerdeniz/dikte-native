@@ -10,7 +10,41 @@ final class VADModelStore: ObservableObject {
     static let expectedSHA256 = "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987"
     static let expectedSize = 885_098
     static var bundledURL: URL? {
-        Bundle.module.url(forResource: "ggml-silero-v6.2.0", withExtension: "bin")
+        if let located = locateBundledModel(searchRoots: runtimeResourceRoots()) {
+            return located
+        }
+#if DEBUG
+        return Bundle.module.url(forResource: "ggml-silero-v6.2.0", withExtension: "bin")
+#else
+        return nil
+#endif
+    }
+
+    static func locateBundledModel(searchRoots: [URL], fileManager: FileManager = .default) -> URL? {
+        let filename = "ggml-silero-v6.2.0.bin"
+        for root in searchRoots {
+            let candidates = [
+                root.appendingPathComponent("DikteNative_DikteNative.bundle", isDirectory: true)
+                    .appendingPathComponent(filename),
+                root.appendingPathComponent(filename)
+            ]
+            if let match = candidates.first(where: { fileManager.fileExists(atPath: $0.path) }) {
+                return match
+            }
+        }
+        return nil
+    }
+
+    private static func runtimeResourceRoots() -> [URL] {
+        var roots = [Bundle.main.resourceURL, Bundle.main.bundleURL].compactMap { $0 }
+        if var directory = Bundle.main.executableURL?.deletingLastPathComponent() {
+            for _ in 0..<6 {
+                roots.append(directory)
+                directory.deleteLastPathComponent()
+            }
+        }
+        var seen = Set<String>()
+        return roots.filter { seen.insert($0.standardizedFileURL.path).inserted }
     }
 
     @Published private(set) var status: Status = .verifying

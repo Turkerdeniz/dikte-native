@@ -64,7 +64,9 @@ Bu yaygın bir Whisper sessizlik halüsinasyonudur. Kısa/sessiz kayıtlarda fil
 
 ## Codex uzun sürüyor veya çalışmıyor
 
-Codex yalnız gerçek kayıt süresi eşikten uzun olduğunda çalışır. Eşiği Codex sekmesinde kontrol et.
+General Codex yalnız gerçek kayıt süresi eşikten uzun olduğunda çalışır; `30.0` saniye yerel, `30.1` saniye Codex'tir. Coding mode ise eşik ve süre bağımsız olarak Codex'e gider; kısa coding kaydı için eşik ayarını değiştirmek gerekmez.
+
+General ve Coding thread'leri ayrıdır. Coding sonucunda History/overlay üzerinde **Coding** veya **Coding mode** etiketi görünmüyorsa bu feature build'inin çalıştığını doğrula; eski kurulu bundle bu davranışı içermez.
 
 Çalıştırılabilir dosya sırası:
 
@@ -72,6 +74,8 @@ Codex yalnız gerçek kayıt süresi eşikten uzun olduğunda çalışır. Eşi�
 2. Dikte'nin `PATH` değerindeki `codex`
 
 Codex timeout'u 120 saniyedir. Hata/iptal durumunda yerel metin korunur. History'deki `codexError` gerçek nedeni gösterir.
+
+Coding prompt compiler dosya değiştirmez, komut çalıştırmaz ve kod yazmaz; yalnızca konuşmayı açık coding-agent prompt'una dönüştürür. Eksik bilgi varsa prompt içinde açıkça belirtilir.
 
 ## Beklenmedik kapanış
 

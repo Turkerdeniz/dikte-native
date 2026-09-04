@@ -17,6 +17,18 @@ enum ProcessingStage: String, Codable, Sendable {
     }
 }
 
+enum CaptureMode: String, Codable, CaseIterable, Sendable {
+    case general
+    case coding
+
+    var title: String {
+        switch self {
+        case .general: "General"
+        case .coding: "Coding mode"
+        }
+    }
+}
+
 enum AppPhase: Equatable, Sendable {
     case idle
     case arming(startedAt: Date, attempt: Int)
@@ -31,6 +43,24 @@ extension AppPhase {
         case .arming(_, let attempt): "arming-\(attempt)"
         case .recording: "recording"
         case .processing(let stage): "processing-\(stage.rawValue)"
+        }
+    }
+}
+
+enum CaptureHotKeyAction: Equatable, Sendable {
+    case start(CaptureMode)
+    case stop
+    case ignore
+}
+
+enum CaptureHotKeyPolicy {
+    static func action(for phase: AppPhase, activeMode: CaptureMode,
+                       requestedMode: CaptureMode, isStarting: Bool = false) -> CaptureHotKeyAction {
+        guard !isStarting || phase != .idle else { return .ignore }
+        switch phase {
+        case .idle: return .start(requestedMode)
+        case .arming, .recording: return activeMode == requestedMode ? .stop : .ignore
+        case .processing: return .ignore
         }
     }
 }
@@ -68,6 +98,11 @@ struct HotKeyConfiguration: Codable, Equatable, Sendable {
     var displayName: String
 
     static let optionD = HotKeyConfiguration(keyCode: 2, modifiers: 1 << 11, displayName: "⌥D")
+    static let optionE = HotKeyConfiguration(keyCode: 14, modifiers: 1 << 11, displayName: "⌥E")
+
+    func matchesShortcut(_ other: HotKeyConfiguration) -> Bool {
+        keyCode == other.keyCode && modifiers == other.modifiers
+    }
 }
 
 enum HistoryMode: String, Codable, Sendable {
@@ -197,6 +232,7 @@ struct HistoryEntry: Identifiable, Codable, Equatable, Sendable {
     let timestamp: Date
     let duration: TimeInterval
     let mode: HistoryMode
+    let captureMode: CaptureMode?
     let rawTranscript: String
     let finalText: String
     let deterministicText: String?
@@ -218,8 +254,10 @@ struct HistoryEntry: Identifiable, Codable, Equatable, Sendable {
     let diagnosticCaptureID: UUID?
 
     init(id: UUID = UUID(), timestamp: Date = Date(), duration: TimeInterval, mode: HistoryMode,
+         captureMode: CaptureMode? = nil,
          rawTranscript: String, finalText: String, codexResponse: String? = nil, codexError: String? = nil) {
         self.init(id: id, timestamp: timestamp, duration: duration, mode: mode,
+                  captureMode: captureMode,
                   rawTranscript: rawTranscript, finalText: finalText, deterministicText: nil,
                   localCorrectedText: nil, accurateTranscript: nil, accuratePassReason: nil,
                   primaryConfidence: nil, accurateConfidence: nil,
@@ -231,6 +269,7 @@ struct HistoryEntry: Identifiable, Codable, Equatable, Sendable {
     }
 
     init(id: UUID = UUID(), timestamp: Date = Date(), duration: TimeInterval, mode: HistoryMode,
+         captureMode: CaptureMode? = nil,
          rawTranscript: String, finalText: String, deterministicText: String?, localCorrectedText: String?,
          accurateTranscript: String? = nil, accuratePassReason: String? = nil,
          primaryConfidence: Float? = nil, accurateConfidence: Float? = nil,
@@ -242,6 +281,7 @@ struct HistoryEntry: Identifiable, Codable, Equatable, Sendable {
          performanceDiagnostics: PerformanceDiagnostics? = nil,
          diagnosticCaptureID: UUID? = nil) {
         self.id = id; self.timestamp = timestamp; self.duration = duration; self.mode = mode
+        self.captureMode = captureMode
         self.rawTranscript = rawTranscript; self.finalText = finalText
         self.deterministicText = deterministicText; self.localCorrectedText = localCorrectedText
         self.accurateTranscript = accurateTranscript; self.accuratePassReason = accuratePassReason
@@ -256,7 +296,7 @@ struct HistoryEntry: Identifiable, Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, timestamp, duration, mode, rawTranscript, finalText, deterministicText, localCorrectedText
+        case id, timestamp, duration, mode, captureMode, rawTranscript, finalText, deterministicText, localCorrectedText
         case accurateTranscript, accuratePassReason, primaryConfidence, accurateConfidence
         case lowConfidenceTokenRatio, wordsPerSecond, charactersPerSecond
         case accurateModelSelected, modelSelectionReason
@@ -270,6 +310,7 @@ struct HistoryEntry: Identifiable, Codable, Equatable, Sendable {
         timestamp = try box.decode(Date.self, forKey: .timestamp)
         duration = try box.decode(TimeInterval.self, forKey: .duration)
         mode = try box.decode(HistoryMode.self, forKey: .mode)
+        captureMode = try box.decodeIfPresent(CaptureMode.self, forKey: .captureMode)
         rawTranscript = try box.decode(String.self, forKey: .rawTranscript)
         finalText = try box.decode(String.self, forKey: .finalText)
         deterministicText = try box.decodeIfPresent(String.self, forKey: .deterministicText)
