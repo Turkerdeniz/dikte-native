@@ -421,7 +421,7 @@ private struct OverlayView: View {
     }
 
     private var modeAccessibilityLabel: String {
-        model.captureMode == .coding ? "Coding modu" : "General modu"
+        model.captureMode == .coding ? "Kısa ve Net modu" : "Ham modu"
     }
 
     private var processingTitle: String {

@@ -32,7 +32,7 @@ final class AppSettings: ObservableObject {
             hotKey = value
         } else { hotKey = .optionD }
         automaticPaste = defaults.object(forKey: Key.automaticPaste) as? Bool ?? true
-        maximumRecording = defaults.object(forKey: Key.maximumRecording) as? Double ?? 300
+        maximumRecording = defaults.object(forKey: Key.maximumRecording) as? Double ?? 600
         let storedOverlay = OverlayPosition(rawValue: defaults.string(forKey: Key.overlayPosition) ?? "") ?? .bottomLeft
         let storedThreshold = defaults.object(forKey: Key.codexThreshold) as? Double ?? 30
         let migrationVersion = defaults.integer(forKey: Key.migrationVersion)
@@ -54,10 +54,14 @@ final class AppSettings: ObservableObject {
         if migrationVersion < 1 {
             defaults.set(codexThreshold, forKey: Key.codexThreshold)
         }
+        if migrationVersion < 8, maximumRecording < 600 {
+            maximumRecording = 600
+            defaults.set(maximumRecording, forKey: Key.maximumRecording)
+        }
         defaults.removeObject(forKey: "smartCleanupEnabled")
         if migrationVersion < 5 { defaults.set(language.rawValue, forKey: Key.language) }
         if migrationVersion < 4 { defaults.set(overlayPosition.rawValue, forKey: Key.overlayPosition) }
-        defaults.set(7, forKey: Key.migrationVersion)
+        defaults.set(8, forKey: Key.migrationVersion)
     }
 
     private func save<T: Encodable>(_ value: T, key: String) {

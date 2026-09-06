@@ -62,11 +62,11 @@ final class AppModel: ObservableObject {
         loginAtStartup = SMAppService.mainApp.status == .enabled
         if settings.hotKey.matchesShortcut(.optionE) {
             settings.hotKey = .optionD
-            alertMessage = "General kısayolu ⌥E ile çakıştığı için ⌥D’ye alındı; ⌥E Coding mode için sabittir."
+            alertMessage = "Ham kısayolu ⌥E ile çakıştığı için ⌥D’ye alındı; ⌥E Kısa ve Net modu için sabittir."
         }
         do {
             if try !installHotKeys(settings.hotKey) {
-                alertMessage = "Coding mode kısayolu (⌥E) kaydedilemedi. General kısayolu çalışmaya devam ediyor."
+                alertMessage = "Kısa ve Net kısayolu (⌥E) kaydedilemedi. Ham kısayolu çalışmaya devam ediyor."
             }
         } catch {
             alertMessage = error.localizedDescription
@@ -229,14 +229,14 @@ final class AppModel: ObservableObject {
 
     func applyHotKey(_ candidate: HotKeyConfiguration) -> Bool {
         guard !candidate.matchesShortcut(.optionE) else {
-            alertMessage = "General kısayolu ⌥E ile çakışamaz; ⌥E Coding mode için sabittir."
+            alertMessage = "Ham kısayolu ⌥E ile çakışamaz; ⌥E Kısa ve Net modu için sabittir."
             return false
         }
         do {
             let codingRegistered = try installHotKeys(candidate)
             settings.hotKey = candidate
             if !codingRegistered {
-                alertMessage = "Coding mode kısayolu (⌥E) kaydedilemedi. General kısayolu çalışmaya devam ediyor."
+                alertMessage = "Kısa ve Net kısayolu (⌥E) kaydedilemedi. Ham kısayolu çalışmaya devam ediyor."
             }
             return true
         } catch {
@@ -273,7 +273,7 @@ final class AppModel: ObservableObject {
     func resetCodexConversation() { settings.codexThreadID = nil; pasteService.notify("Yeni Codex konuşması", "Bir sonraki uzun kayıt yeni bir konuşma başlatacak.") }
     func resetCodingCodexConversation() {
         settings.codingCodexThreadID = nil
-        pasteService.notify("Yeni Coding konuşması", "Bir sonraki coding kaydı yeni bir konuşma başlatacak.")
+        pasteService.notify("Yeni Kısa ve Net konuşması", "Bir sonraki Kısa ve Net kaydı yeni bir konuşma başlatacak.")
     }
     func copyLastResult() { if let lastResult { _ = pasteService.copyAndOptionallyPaste(lastResult, shouldPaste: false) } }
     func copy(_ text: String) { _ = pasteService.copyAndOptionallyPaste(text, shouldPaste: false) }
@@ -845,8 +845,8 @@ final class AppModel: ObservableObject {
     }
 
     private func askCodex(_ text: String, threadID: String?, mode: CaptureMode) async throws -> CodexResult {
-        let promptKind: CodexPromptKind = mode == .coding ? .coding : .editing
-        return try await withTimeout(seconds: 120) {
+        let promptKind: CodexPromptKind = mode == .coding ? .concise : .editing
+        return try await withTimeout(seconds: 240) {
             try await self.codex.ask(transcript: text, existingThreadID: threadID, promptKind: promptKind) { id in
                 Task { @MainActor in self.setCodexThreadID(id, for: mode) }
             }

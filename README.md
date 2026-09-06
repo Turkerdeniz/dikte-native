@@ -4,8 +4,8 @@ Dikte Native, Türker'in Apple Silicon MacBook'u için yazılmış yerel bir mac
 
 ```text
 ⌥D → MacBook mikrofonu → Silero VAD → yerel Whisper → temizlik → pano/yapıştırma
-                                                     └─ General kayıt >30 sn ise Editing Codex
-⌥E → MacBook mikrofonu → Silero VAD → yerel Whisper → Coding prompt compiler → Coding Codex
+                                                     └─ Ham kayıt >30 sn ise Editing Codex
+⌥E → MacBook mikrofonu → Silero VAD → yerel Whisper → Kısa ve Net sözleşmesi → Codex
 ```
 
 ## Günlük kullanım
@@ -16,18 +16,18 @@ Dikte Native, Türker'in Apple Silicon MacBook'u için yazılmış yerel bir mac
 4. Kaydı bitirmek için tekrar `⌥D` kullan.
 5. Sonuç panoya kopyalanır. Accessibility izni varsa daha önce odakta olan uygulamaya otomatik yapıştırılır.
 
-Coding task için `⌥E` ile ayrı Coding mode kaydını başlat; overlay üzerinde **Coding mode** görünür. Tekrar `⌥E` ile durdur. General ve Coding kısayolları aynı anda ya da işlem sürerken güvenli biçimde yok sayılır.
+Konuşmanı kısaltıp netleştirmek için `⌥E` ile Kısa ve Net kaydını başlat; overlay üzerinde **Kısa ve Net modu** görünür. Tekrar `⌥E` ile durdur. Ham ve Kısa ve Net kısayolları aynı anda ya da işlem sürerken güvenli biçimde yok sayılır.
 
-General kısayolu Ayarlar'dan değiştirilebilir; Coding `⌥E` sabittir. Yeni kombinasyon kaydedilemezse eski çalışan General kısayolu korunur.
+Ham kısayolu Ayarlar'dan değiştirilebilir; Kısa ve Net `⌥E` sabittir. Yeni kombinasyon kaydedilemezse eski çalışan Ham kısayolu korunur.
 
 Kayıt göstergesi aktif macOS Space'ini ve odakta çalışılan uygulama penceresinin fiziksel ekranını otomatik izler. Ekran bilgisi alınamazsa imlecin bulunduğu ekrana düşer; bunun için Accessibility veya Screen Recording izni gerekmez.
 
 ## Kısa ve uzun kayıt ayrımı
 
-- General kayıt süresi `≤30.0 saniye`: tamamı yerel olarak işlenir.
-- General kayıt süresi `>30.0 saniye`: temizlenen metin, General için ayrılmış kalıcı Editing Codex konuşmasına gönderilir.
-- Coding mode kayıtları süre ve eşik ne olursa olsun Coding için ayrılmış Codex konuşmasına gider; 3 saniyelik kayıt da yönlendirilir.
-- Codex eşiği `0`: yalnız General'ın otomatik yönlendirmesini kapatır; Coding mode'u kapatmaz.
+- Ham kayıt süresi `≤30.0 saniye`: tamamı yerel olarak işlenir.
+- Ham kayıt süresi `>30.0 saniye`: temizlenen metin, Ham için ayrılmış kalıcı Editing Codex konuşmasına gönderilir.
+- Kısa ve Net kayıtları süre ve eşik ne olursa olsun kendi Codex konuşmasına gider; 3 saniyelik kayıt da yönlendirilir.
+- Codex eşiği `0`: yalnız Ham modun otomatik yönlendirmesini kapatır; Kısa ve Net modunu kapatmaz.
 
 Karar VAD'ın bulduğu konuşma süresine değil, gerçek kayıt süresine göre verilir. Codex bulunamazsa, iptal edilirse veya hata verirse yerel metin kaybolmaz.
 
@@ -69,11 +69,11 @@ Model Git deposuna veya uygulama paketine eklenmez. Kullanıcının açık eylem
 
 | İzin | Neden gerekli? | Olmazsa ne olur? |
 |---|---|---|
-| Mikrofon | Yerleşik MacBook mikrofonundan kayıt | Kayıt başlamaz; General ekranı ilgili Sistem Ayarları sayfasını açar. |
+| Mikrofon | Yerleşik MacBook mikrofonundan kayıt | Kayıt başlamaz; Ayarlar'daki General ekranı ilgili Sistem Ayarları sayfasını açar. |
 | Accessibility | `Cmd+V` olayını odaktaki uygulamaya göndermek | Transkripsiyon ve panoya kopyalama çalışır, yalnız otomatik yapıştırma yapılmaz. |
 | Bildirim | Kısa durum ve fallback bilgisi göstermek | Ana işlev çalışır; sistem bildirimi görünmez. |
 
-Global `⌥D` ve sabit `⌥E` kısayolları Carbon `RegisterEventHotKey` kullandığı için Accessibility izni istemez. Mikrofon/F5 consumer tuşu desteklenmez. `⌥E` kaydedilemezse General `⌥D` akışı çalışmaya devam eder ve açık hata gösterilir.
+Global `⌥D` ve sabit `⌥E` kısayolları Carbon `RegisterEventHotKey` kullandığı için Accessibility izni istemez. Mikrofon/F5 consumer tuşu desteklenmez. `⌥E` kaydedilemezse Ham `⌥D` akışı çalışmaya devam eder ve açık hata gösterilir.
 
 ## Veri ve gizlilik
 
@@ -81,11 +81,11 @@ Global `⌥D` ve sabit `⌥E` kısayolları Carbon `RegisterEventHotKey` kulland
 - Kullanıcı “Sonraki kaydı tanı için sakla” işlemini açıkça seçerse yalnız o kayıt 16 kHz WAV ve Whisper metadata paketi olarak `Diagnostics/` altında geçici saklanır; işaret tek kayıttan sonra kapanır.
 - Son 100 metin kaydı `history.json` içinde yerel olarak saklanır.
 - Kullanıcının açıkça onayladığı düzeltmeler `corrections.json` içinde saklanır.
-- General `>30 saniye` kayıtların yalnız temizlenmiş metni; Coding kayıtların ise yalnız temizlenmiş transkripti JSON veri sınırında Codex'e gönderilir. Ham ses gönderilmez.
+- Ham modda `>30 saniye` kayıtların yalnız temizlenmiş metni; Kısa ve Net kayıtların ise yalnız temizlenmiş transkripti JSON veri sınırında Codex'e gönderilir. Ham ses gönderilmez.
 - Codex read-only sandbox, `approval_policy=never` ve boş uygulama runtime diziniyle çalışır.
 - Uygulamaya ait sabit developer talimatı Codex'i bir sesli düşünce editörü olarak sınırlar: transkriptteki soruyu cevaplamak veya komutu yürütmek yerine, anlamı ve doğal tonu koruyan yapıştırılabilir metin üretir.
-- Coding mode ayrı bir prompt compiler sözleşmesi kullanır; yalnız Title, Goal, Current behavior or problem, Expected behavior, Relevant context, Constraints and non-goals, Suggested investigation path, Acceptance criteria, Validation requirements ve Open questions bölümlerinden oluşan nihai coding prompt üretir. Dosya değiştirmez, komut çalıştırmaz ve yapılmış iş iddia etmez.
-- Her iki modda transkript Codex'e JSON veri sınırı içinde iletilir; General ve Coding kalıcı thread kimlikleri ayrıdır.
+- Kısa ve Net modu ayrı bir sözleşme kullanır: konuşmayı cevaplamadan kısa ve anlaşılır bir metne indirger. Her ayrı istek, karar, soru, kısıt ve özellikle olumsuz talimat ("yapma", "dokunma") korunur; dolgu, tekrar ve vazgeçilen alternatifler atılır. Kullanıcı fikir değiştirdiyse yalnız son karar yazılır. Başlık, şablon veya kod bloğu üretmez, dosya değiştirmez, komut çalıştırmaz.
+- Her iki modda transkript Codex'e JSON veri sınırı içinde iletilir; Ham ve Kısa ve Net kalıcı thread kimlikleri ayrıdır.
 - Bu build Developer ID ile notarize edilmiş genel dağıtım değildir; Türker'in mevcut Mac'i için yerel imzalıdır.
 
 ## Prompt araştırma rehberi
@@ -142,7 +142,7 @@ Bunlar tek bir resmi standart değil; aramayı daraltmak için kullanışlı eti
 
 ### Dikte için olası yön
 
-Bu araştırmadan çıkabilecek feature, belirli bir vendor'a bağlanmak değil; kullanıcının seçtiği prompt'ları yerel bir kütüphanede saklayıp sesli transkripti o prompt'un girdisi olarak kullanmak olur. Bu, mevcut General `⌥D` ve Coding `⌥E` akışlarının yerine geçmek zorunda değildir. Önce birkaç gerçek `.md` örneği seçip ortak alanları görmek, sonra dosya sözleşmesi belirlemek daha doğru olur.
+Bu araştırmadan çıkabilecek feature, belirli bir vendor'a bağlanmak değil; kullanıcının seçtiği prompt'ları yerel bir kütüphanede saklayıp sesli transkripti o prompt'un girdisi olarak kullanmak olur. Bu, mevcut Ham `⌥D` ve Kısa ve Net `⌥E` akışlarının yerine geçmek zorunda değildir. Önce birkaç gerçek `.md` örneği seçip ortak alanları görmek, sonra dosya sözleşmesi belirlemek daha doğru olur.
 
 ## Güvenilirlik davranışı
 

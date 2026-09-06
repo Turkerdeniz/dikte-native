@@ -15,8 +15,8 @@ Bu belge Dikte Native'in ses paketinden son metne kadar izlediği yolu ve hata d
 
 ```mermaid
 flowchart LR
-    A[Option+D · General] --> B[arming]
-    A2[Option+E · Coding] --> B
+    A[Option+D · Ham] --> B[arming]
+    A2[Option+E · Kısa ve Net] --> B
     B -->|ilk gerçek paket| C[recording]
     C --> D[16 kHz mono Float32]
     D --> E[Silero VAD]
@@ -27,16 +27,16 @@ flowchart LR
     G --> J[deterministik temizlik]
     H --> J
     I --> J
-    J -->|General · süre ≤ eşik| K[pano / otomatik yapıştırma]
-    J -->|General · süre > eşik| L[General Editing Codex thread]
-    J -->|Coding · her süre| L2[Coding compiler Codex thread]
+    J -->|Ham · süre ≤ eşik| K[pano / otomatik yapıştırma]
+    J -->|Ham · süre > eşik| L[Ham Editing Codex thread]
+    J -->|Kısa ve Net · her süre| L2[Kısa ve Net Codex thread]
     L --> K
     L2 --> K
     L -->|hata / iptal / timeout| J
     L2 -->|hata / iptal / timeout| J
 ```
 
-İki kısayol aynı kayıt hattını paylaşır; `CaptureMode` capture başlangıcında seçilir ve asenkron işlem boyunca değişmeden taşınır. General kısayolu Ayarlar’dan değiştirilebilir, Coding kısayolu `⌥E` olarak sabittir. Başlatma yarışında, karşı modun kaydı sürerken veya `processing` aşamasında gelen kısayol yok sayılır.
+İki kısayol aynı kayıt hattını paylaşır; `CaptureMode` capture başlangıcında seçilir ve asenkron işlem boyunca değişmeden taşınır. Ham kısayolu Ayarlar’dan değiştirilebilir, Kısa ve Net kısayolu `⌥E` olarak sabittir. Başlatma yarışında, karşı modun kaydı sürerken veya `processing` aşamasında gelen kısayol yok sayılır.
 
 ## Durum makinesi
 
@@ -90,24 +90,24 @@ Retry özgün, kesintisiz kayıt aralığında yeni decoder durumu, kesin Türk�
 
 ## Codex
 
-General için yalnız `duration > threshold` olduğunda deterministik temizlenmiş metin Codex'e gider; `30.0` saniye yerel, `30.1` saniye Codex sınırıdır. Coding mode ise süre/eşik bağımsız olarak Codex'e gider. Çalıştırılabilir dosya önce `/Applications/ChatGPT.app/Contents/Resources/codex`, sonra uygulama `PATH`'i içinde aranır.
+Ham mod için yalnız `duration > threshold` olduğunda deterministik temizlenmiş metin Codex'e gider; `30.0` saniye yerel, `30.1` saniye Codex sınırıdır. Kısa ve Net modu ise süre/eşik bağımsız olarak Codex'e gider. Çalıştırılabilir dosya önce `/Applications/ChatGPT.app/Contents/Resources/codex`, sonra uygulama `PATH`'i içinde aranır.
 
 Codex:
 
 - yeni pencere açmadan `codex exec --json` kullanır,
 - `read-only` sandbox ve `approval_policy=never` ile çalışır,
 - kullanıcı config/rules dosyalarını yüklemez,
-- General çağrısında uygulamaya ait sabit `developer_instructions` düzenleme sözleşmesini; Coding çağrısında ayrı prompt compiler sözleşmesini modele verir,
+- Ham çağrısında uygulamaya ait sabit `developer_instructions` düzenleme sözleşmesini; Kısa ve Net çağrısında ayrı indirgeme sözleşmesini modele verir,
 - transkripti talimat değil JSON içindeki düzenlenecek kaynak veri olarak sınırlar,
-- General soru/komuta cevap vermeden yalnız yapıştırılabilir nihai düz metni üretir; Coding yalnız yapılandırılmış nihai coding prompt üretir,
-- Coding sözleşmesi dosya/komut/araç kullanmaz; eksik bilgiyi tahmin etmek yerine açıkça belirtir ve debug yolunu `inspect → hypotheses → evidence → cheapest experiment → validation` sırasına bağlar,
+- Ham mod soru/komuta cevap vermeden yalnız yapıştırılabilir nihai düz metni üretir; Kısa ve Net modu aynı metni kısaltılmış biçimde üretir,
+- Kısa ve Net sözleşmesi dosya/komut/araç kullanmaz; her ayrı talimatı ve olumsuz ifadeyi korur, vazgeçilen alternatifleri atar, şablon veya kod bloğu üretmez,
 - Application Support içindeki boş `CodexRuntime` dizininde çalışır,
 - `thread.started` kimliğini gelir gelmez moda ait UserDefaults anahtarına yazar,
-- General ve Coding sonraki çağrılarda ayrı kalıcı thread'lerini resume eder,
-- 120 saniye timeout uygular.
+- Ham ve Kısa ve Net sonraki çağrılarda ayrı kalıcı thread'lerini resume eder,
+- 240 saniye timeout uygular.
 
-Thread kayıpsa ilgili mod için bir kez yeni thread denenir. Her hata, timeout ve iptal temizlenmiş yerel metne düşer. Coding thread'i General thread'inden bağımsızdır; yeni Coding konuşması yalnız Coding anahtarını sıfırlar.
-Sözleşmenin eklendiği ilk migrasyon eski General editör thread'ini bir kez temizler; Coding thread anahtarı da feature migrasyonunda temizlenir ve sonraki açılışlarda ayrı tutulur.
+Thread kayıpsa ilgili mod için bir kez yeni thread denenir. Her hata, timeout ve iptal temizlenmiş yerel metne düşer. Kısa ve Net thread'i Ham thread'inden bağımsızdır; yeni Kısa ve Net konuşması yalnız kendi anahtarını sıfırlar.
+Sözleşmenin eklendiği ilk migrasyon eski Ham editör thread'ini bir kez temizler; ikinci thread anahtarı da feature migrasyonunda temizlenir ve sonraki açılışlarda ayrı tutulur.
 
 ## Model ve bellek yaşam döngüsü
 
@@ -129,7 +129,7 @@ Whisper ilk kayıtta arka planda hazırlanabilir. Tek sahibi AppModel olan idle 
 | Crash breadcrumb | `.../Dikte Native/active-session.json` | Session ID, aşama, model/bellek baskısı; içerik yok |
 | Codex runtime | `.../Dikte Native/CodexRuntime/` | Uygulamaya özel geçici çalışma dizini |
 | Whisper tanısı | `.../Dikte Native/Diagnostics/<capture-id>/` | Yalnız açık tek-kayıt işaretinde 16 kHz WAV ve History bağlantılı metadata |
-| Ayarlar | macOS UserDefaults | Dil, General kısayolu, sabit Coding `⌥E`, eşik, iki ayrı thread ID ve görünüm tercihleri |
+| Ayarlar | macOS UserDefaults | Dil, Ham kısayolu, sabit Kısa ve Net `⌥E`, eşik, iki ayrı thread ID ve görünüm tercihleri |
 
-History atomik Codable JSON olarak yazılır ve 100 kayıtla sınırlandırılır. Yeni `captureMode` alanı General/Coding ayrımını taşır; eski History kayıtları alan yokken geriye dönük olarak okunur.
+History atomik Codable JSON olarak yazılır ve 100 kayıtla sınırlandırılır. `captureMode` alanı Ham/Kısa ve Net ayrımını taşır (kayıtlı ham değerler `general`/`coding` olarak korunur); eski History kayıtları alan yokken geriye dönük olarak okunur.
 Tanı bayrağı kalıcı ayar değildir: mikrofon testi tarafından tüketilmez, ilk başlayan normal kayıtta tüketilir ve uygulama yeniden açıldığında kapalıdır. Metadata gerçek süreyi, ses tanısını, VAD bölgelerini, Whisper parçalarını ve ham/temiz/nihai metni taşır. Normal kayıt hattı tanı kapalıyken dosya veya klasör oluşturmaz.

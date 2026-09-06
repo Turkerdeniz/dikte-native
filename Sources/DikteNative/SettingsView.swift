@@ -86,7 +86,7 @@ private struct GeneralSettingsView: View {
                     }
                     Picker("Dil", selection: $settings.language) { ForEach(RecognitionLanguage.allCases) { Text($0.title).tag($0) } }
                     HStack { Text("Maksimum kayıt"); Spacer(); Text("\(Int(settings.maximumRecording / 60)) dakika").foregroundStyle(.secondary) }
-                    Slider(value: $settings.maximumRecording, in: 60...300, step: 60)
+                    Slider(value: $settings.maximumRecording, in: 60...600, step: 60)
                     Divider()
                     HStack {
                         Label(microphonePermissionTitle,
@@ -102,13 +102,13 @@ private struct GeneralSettingsView: View {
                 }
                 SectionCard("Kısayol") {
                     HStack {
-                        Text("General kısayolu"); Spacer()
+                        Text("Ham kısayolu"); Spacer()
                         Button(settings.hotKey.displayName) { recordingHotKey = true }.keyboardShortcut(.none)
                     }
                     HStack {
-                        Text("Coding mode"); Spacer(); Text(HotKeyConfiguration.optionE.displayName).foregroundStyle(.secondary)
+                        Text("Kısa ve Net"); Spacer(); Text(HotKeyConfiguration.optionE.displayName).foregroundStyle(.secondary)
                     }
-                    Text("Varsayılan General kısayolu ⌥D’dir. Coding mode için ⌥E sabittir; ikinci bir kısayol düzenleyicisi yoktur. Mikrofon/F5 tuşu kullanılmaz ve Erişilebilirlik izni gerekmez.")
+                    Text("Varsayılan Ham kısayolu ⌥D’dir. Kısa ve Net modu için ⌥E sabittir; ikinci bir kısayol düzenleyicisi yoktur. Mikrofon/F5 tuşu kullanılmaz ve Erişilebilirlik izni gerekmez.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 SectionCard("Pano ve görünüm") {
@@ -272,9 +272,9 @@ private struct CodexSettingsView: View {
                 Text("Codex konuşmayı cevaplamaz; anlamı ve doğal tonu koruyarak doğrudan yapıştırılabilir metne dönüştürür.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Label("Coding prompt compiler etkin", systemImage: "chevron.left.forwardslash.chevron.right")
+                Label("Kısa ve Net sözleşmesi etkin", systemImage: "text.append")
                     .font(.caption)
-                Text("Coding mode, konuşmayı cevaplamadan yapılandırılmış bir coding prompt’una dönüştürür; dosya değiştirmez ve komut çalıştırmaz.")
+                Text("Kısa ve Net modu, konuşmayı cevaplamadan kısa ve anlaşılır bir metne indirger; talimatları ve olumsuz ifadeleri korur, şablon veya kod bloğu üretmez.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -288,10 +288,10 @@ private struct CodexSettingsView: View {
                 Text(settings.codexThreadID.map { "Aktif: \($0)" } ?? "Henüz konuşma oluşturulmadı").textSelection(.enabled).lineLimit(2)
                 Button("Yeni konuşma", role: .destructive) { model.resetCodexConversation() }
             }
-            SectionCard("Coding mode konuşması") {
+            SectionCard("Kısa ve Net konuşması") {
                 Text(settings.codingCodexThreadID.map { "Aktif: \($0)" } ?? "Henüz coding konuşması oluşturulmadı")
                     .textSelection(.enabled).lineLimit(2)
-                Button("Yeni coding konuşması", role: .destructive) { model.resetCodingCodexConversation() }
+                Button("Yeni Kısa ve Net konuşması", role: .destructive) { model.resetCodingCodexConversation() }
             }
             Spacer()
         }.padding(20)

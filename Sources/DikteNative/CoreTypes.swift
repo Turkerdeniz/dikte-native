@@ -23,8 +23,8 @@ enum CaptureMode: String, Codable, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .general: "General"
-        case .coding: "Coding mode"
+        case .general: "Ham"
+        case .coding: "Kısa ve Net"
         }
     }
 }

@@ -16,9 +16,9 @@ Build script aynı paketi release build'den önce otomatik çalıştırır. Test
 - eksik parça/bütün kayıt fallback kararları
 - Türkçe ayar ve eski config migrasyonları
 - Codex JSON event/thread parser
-- General/Coding route policy sınırı, kısayol çakışması ve capture-mode geçişleri
-- Codex developer düzenleme sözleşmesi, Coding prompt compiler, JSON veri sınırı ve iki ayrı thread migrasyonu
-- Coding prompt'un yalnız gerekli bölümleri üretmesi, eksik bilgiyi uydurmaması ve debug sırasını koruması
+- Ham/Kısa ve Net route policy sınırı, kısayol çakışması ve capture-mode geçişleri
+- Codex developer düzenleme sözleşmesi, Kısa ve Net indirgeme sözleşmesi, JSON veri sınırı ve iki ayrı thread migrasyonu
+- Kısa ve Net sözleşmesinin olumsuz talimatları koruması, fikir değişikliğinde son kararı seçmesi ve şablon/kod bloğu üretmemesi
 - tek kullanımlık Whisper tanı işareti, WAV süre/başlık doğrulaması, History bağlantısı ve güvenli tanı silme sınırı
 - overlay boyut/konum, negatif ekran koordinatları ve ön pencerenin ekran çoğunluğu politikası
 - waveform attack/release, sınırlandırma, sessizliğe dönüş ve kayıtlar arası reset
@@ -61,7 +61,7 @@ Dry-run öncesi ve sonrası `/Applications/Dikte.app` ile Application Support in
 | Senaryo | Beklenen sonuç |
 |---|---|
 | `⌥D`, 3–5 sn Türkçe | Yerel sonuç, panoya kopyalama ve izin varsa otomatik yapıştırma |
-| `⌥E`, 3 sn coding isteği | Süreden bağımsız Coding mode; ayrı Codex thread'ine yapılandırılmış coding prompt gönderilir |
+| `⌥E`, 3 sn konuşma | Süreden bağımsız Kısa ve Net modu; ayrı Codex thread'ine indirgeme isteği gönderilir |
 | `⌥E` ile kayıt sürerken `⌥D` | Karşı mod kaydı başlatılmaz/durdurulmaz; aktif kayıt korunur |
 | Codex işleme aşamasında `⌥D` veya `⌥E` | Kısayol yok sayılır; çalışan işlem kesilmez |
 | İlk cümle, 8–12 sn sessizlik, ikinci cümle | Her iki cümle sonuçta bulunur |
@@ -70,7 +70,7 @@ Dry-run öncesi ve sonrası `/Applications/Dikte.app` ile Application Support in
 | `Codex`, `Whisper`, `Option D` içeren Türkçe | Doğrulanmış İngilizce terimler korunur |
 | Tam `30.0 sn` | Yerel pipeline |
 | `30.1 sn` ve üzeri | Kalıcı Codex thread; başarısızsa yerel fallback |
-| General kısayolu olarak `⌥E` kaydetme denemesi | Reddedilir; `⌥E` Coding mode için sabit kalır |
+| Ham kısayolu olarak `⌥E` kaydetme denemesi | Reddedilir; `⌥E` Kısa ve Net modu için sabit kalır |
 | Boş Whisper parçası | Özgün aralıktan retry; gerekirse bütün kayıt fallback |
 | Kurtarılamayan parça | Otomatik yapıştırma yok; kısmi metin panoda/History'de `incomplete` |
 | Accessibility kapalı | Transkripsiyon/pano çalışır, yalnız Cmd+V yapılmaz |

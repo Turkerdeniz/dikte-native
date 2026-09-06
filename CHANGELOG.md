@@ -2,6 +2,14 @@
 
 Bu dosya kullanıcıya ve bakım yapan geliştiriciye dönük önemli değişiklikleri özetler. Ayrıntılı teknik davranış için `docs/` belgelerine bak.
 
+## Çalışma ağacı — Kısa ve Net modu — 6 Eylül 2026
+
+- `⌥E` artık yapılandırılmış coding prompt üretmiyor; konuşmayı cevaplamadan kısa ve anlaşılır bir metne indirgiyor. Mod adları kullanıcı arayüzünde **Ham** (`⌥D`) ve **Kısa ve Net** (`⌥E`) olarak değişti.
+- Yeni indirgeme sözleşmesi her ayrı istek, karar, soru ve kısıtla birlikte olumsuz talimatları ("yapma", "dokunma") korur; dolgu, tekrar ve vazgeçilen alternatifleri atar. Kullanıcı fikir değiştirdiyse yalnız son karar, ekleme yaptıysa iki ifade de yazılır. Başlık, şablon veya kod bloğu üretmez.
+- Maksimum kayıt süresi 5 dakikadan 10 dakikaya çıkarıldı; mevcut kurulumlarda kayıtlı 5 dakikalık değer migration ile yükseltilir.
+- Codex timeout'u uzayan kayıtlarla orantılı olarak 120 saniyeden 240 saniyeye çıkarıldı.
+- `⌥D` akışı, route politikası, thread ayrımı ve History geriye dönük uyumluluğu değişmedi; kayıtlı `captureMode` ham değerleri (`general`/`coding`) korundu.
+
 ## Çalışma ağacı — Coding Dictation — 31 Ağustos 2026
 
 - Sabit `⌥E` ile mevcut General `⌥D` akışından ayrı Coding mode eklendi; General'ın süreye bağlı `>30.0 saniye` Codex yönlendirmesi korundu.

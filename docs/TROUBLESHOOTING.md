@@ -64,9 +64,9 @@ Bu yaygın bir Whisper sessizlik halüsinasyonudur. Kısa/sessiz kayıtlarda fil
 
 ## Codex uzun sürüyor veya çalışmıyor
 
-General Codex yalnız gerçek kayıt süresi eşikten uzun olduğunda çalışır; `30.0` saniye yerel, `30.1` saniye Codex'tir. Coding mode ise eşik ve süre bağımsız olarak Codex'e gider; kısa coding kaydı için eşik ayarını değiştirmek gerekmez.
+Ham modda Codex yalnız gerçek kayıt süresi eşikten uzun olduğunda çalışır; `30.0` saniye yerel, `30.1` saniye Codex'tir. Kısa ve Net modu ise eşik ve süre bağımsız olarak Codex'e gider; kısa kayıt için eşik ayarını değiştirmek gerekmez.
 
-General ve Coding thread'leri ayrıdır. Coding sonucunda History/overlay üzerinde **Coding** veya **Coding mode** etiketi görünmüyorsa bu feature build'inin çalıştığını doğrula; eski kurulu bundle bu davranışı içermez.
+Ham ve Kısa ve Net thread'leri ayrıdır. `⌥E` sonucunda History/overlay üzerinde **Kısa ve Net** etiketi görünmüyorsa bu feature build'inin çalıştığını doğrula; eski kurulu bundle bu davranışı içermez.
 
 Çalıştırılabilir dosya sırası:
 
@@ -75,7 +75,7 @@ General ve Coding thread'leri ayrıdır. Coding sonucunda History/overlay üzeri
 
 Codex timeout'u 120 saniyedir. Hata/iptal durumunda yerel metin korunur. History'deki `codexError` gerçek nedeni gösterir.
 
-Coding prompt compiler dosya değiştirmez, komut çalıştırmaz ve kod yazmaz; yalnızca konuşmayı açık coding-agent prompt'una dönüştürür. Eksik bilgi varsa prompt içinde açıkça belirtilir.
+Kısa ve Net sözleşmesi dosya değiştirmez, komut çalıştırmaz ve kod yazmaz; yalnızca konuşmayı kısaltıp netleştirir. Talimatlar ve olumsuz ifadeler korunur, şablon veya kod bloğu üretilmez.
 
 ## Beklenmedik kapanış
 

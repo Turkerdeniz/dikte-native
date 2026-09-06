@@ -13,10 +13,10 @@ Son doğrulama: 31 Ağustos 2026
 - VAD: gömülü Silero `v6.2.0`, doğrulanmış SHA-256
 - Varsayılan dil: Türkçe
 - Varsayılan kısayol: `⌥D`
-- Coding mode: sabit `⌥E`; General `⌥D` akışı korunuyor
-- Codex eşiği: General için gerçek kayıt süresi kesin olarak `>30.0 saniye`; Coding süre/eşik bağımsız
-- Codex: General Editing ve Coding prompt compiler sözleşmeleri ayrı; iki thread kimliği ve transkript JSON veri sınırı
-- Overlay: sol alt kompakt; aktif Space ve ön uygulamanın fiziksel ekranını otomatik takip eder; General turuncu, Coding kırmızı dot kullanır
+- Kısa ve Net modu: sabit `⌥E`; Ham `⌥D` akışı korunuyor
+- Codex eşiği: Ham mod için gerçek kayıt süresi kesin olarak `>30.0 saniye`; Kısa ve Net süre/eşik bağımsız
+- Codex: Ham Editing ve Kısa ve Net indirgeme sözleşmeleri ayrı; iki thread kimliği ve transkript JSON veri sınırı
+- Overlay: sol alt kompakt; aktif Space ve ön uygulamanın fiziksel ekranını otomatik takip eder; Ham turuncu, Kısa ve Net kırmızı dot kullanır
 - Whisper tanısı: tek kullanımlık ve varsayılan kapalı; açıkça seçilen kayıt `Diagnostics/` altında geçici WAV + metadata olarak saklanır
 
 ## Son doğrulama özeti
@@ -38,7 +38,7 @@ Kesin test sayısını burada sabitleme; güncel sayı için test çıktısını
 - Genel dağıtım/notarization yok; yerel imza yalnız bu Mac için.
 - Whisper hızlı, düşük sesli veya başka insanların konuştuğu gürültülü ortamda kusursuz değildir.
 - Voice Processing ve Qwen metin düzeltici bu sürümde yoktur.
-- Codex gecikmesi yerel transkripsiyondan bağımsızdır ve 120 saniye timeout'a sahiptir.
+- Codex gecikmesi yerel transkripsiyondan bağımsızdır ve 240 saniye timeout'a sahiptir.
 - Otomatik yapıştırma Accessibility iznine bağlıdır; panoya kopyalama bağlı değildir.
 - Hoparlör sesi/audio loopback ortamı yoksa gerçek mikrofonla `⌥D`/`⌥E` manuel QA çalıştırılmadı; bu, otomatik testlerin kapsamı dışındaki runtime doğrulamasıdır.
 
@@ -47,7 +47,7 @@ Kesin test sayısını burada sabitleme; güncel sayı için test çıktısını
 1. Önce `git status` ve [release kontrol listesini](docs/TESTING.md) kontrol et.
 2. Günlük kullanım hatasında önce History içindeki ses/parça/performance tanısını incele.
 3. Crash iddiasında yeni `.ips` tarihini ve breadcrumb aşamasını doğrula.
-4. Yeni özellik eklemeden önce General kısa, General `>30 saniye` ve Coding kısa akışlarını regresyon testinden geçir; çapraz kısayol basışlarını da kontrol et.
+4. Yeni özellik eklemeden önce Ham kısa, Ham `>30 saniye` ve Kısa ve Net kısa akışlarını regresyon testinden geçir; çapraz kısayol basışlarını da kontrol et.
 
 ## Ana belgeler
 

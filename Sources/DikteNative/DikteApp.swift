@@ -59,7 +59,7 @@ private struct DikteMenu: View {
         Divider()
         Button("Copy Last Result") { model.copyLastResult() }.disabled(model.lastResult == nil)
         Button("New Codex Conversation") { model.resetCodexConversation() }
-        Button("New Coding Conversation") { model.resetCodingCodexConversation() }
+        Button("Yeni Kısa ve Net Konuşması") { model.resetCodingCodexConversation() }
         Divider()
         Button(model.diagnosticCaptureArmed ? "Cancel Next Diagnostic Capture" : "Save Next Recording for Diagnosis") {
             model.toggleDiagnosticCapture()

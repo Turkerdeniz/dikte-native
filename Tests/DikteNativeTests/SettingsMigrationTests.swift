@@ -31,7 +31,7 @@ final class SettingsMigrationTests: XCTestCase {
         _ = AppSettings(defaults: defaults)
 
         XCTAssertNil(defaults.object(forKey: "smartCleanupEnabled"))
-        XCTAssertEqual(defaults.integer(forKey: "migrationVersion"), 7)
+        XCTAssertEqual(defaults.integer(forKey: "migrationVersion"), 8)
     }
 
     func testOverlayMigratesToCompactBottomLeft() {
@@ -71,7 +71,7 @@ final class SettingsMigrationTests: XCTestCase {
 
         XCTAssertNil(migrated.codexThreadID)
         XCTAssertNil(defaults.string(forKey: "codexThreadID"))
-        XCTAssertEqual(defaults.integer(forKey: "migrationVersion"), 7)
+        XCTAssertEqual(defaults.integer(forKey: "migrationVersion"), 8)
 
         defaults.set("new-editor-thread", forKey: "codexThreadID")
         let relaunched = AppSettings(defaults: defaults)
@@ -91,7 +91,7 @@ final class SettingsMigrationTests: XCTestCase {
         XCTAssertEqual(migrated.codexThreadID, "general-thread")
         XCTAssertNil(migrated.codingCodexThreadID)
         XCTAssertNil(defaults.string(forKey: "codingCodexThreadID"))
-        XCTAssertEqual(defaults.integer(forKey: "migrationVersion"), 7)
+        XCTAssertEqual(defaults.integer(forKey: "migrationVersion"), 8)
 
         defaults.set("coding-thread", forKey: "codingCodexThreadID")
         let relaunched = AppSettings(defaults: defaults)

@@ -4,19 +4,19 @@ struct CodexResult: Sendable { let text: String; let threadID: String }
 
 enum CodexPromptKind: Sendable {
     case editing
-    case coding
+    case concise
 
     var userPrompt: (String) -> String {
         switch self {
         case .editing: CodexEditingPrompt.userPrompt
-        case .coding: CodexCodingPrompt.userPrompt
+        case .concise: CodexConcisePrompt.userPrompt
         }
     }
 
     var developerConfigurationOverride: String {
         switch self {
         case .editing: CodexEditingPrompt.developerConfigurationOverride
-        case .coding: CodexCodingPrompt.developerConfigurationOverride
+        case .concise: CodexConcisePrompt.developerConfigurationOverride
         }
     }
 }
