@@ -75,10 +75,6 @@ final class CorrectionStore: ObservableObject {
                   entries.filter(\.isEnabled).map(\.corrected))).sorted()
     }
 
-    var promptPairs: [String] {
-        entries.filter(\.isEnabled).map { "\($0.heard) → \($0.corrected)" }
-    }
-
     func confirm(_ candidates: [CorrectionCandidate]) {
         for candidate in candidates where !candidate.heard.isEmpty && !candidate.corrected.isEmpty {
             if let index = entries.firstIndex(where: {
@@ -86,10 +82,23 @@ final class CorrectionStore: ObservableObject {
                 $0.corrected.localizedCaseInsensitiveCompare(candidate.corrected) == .orderedSame
             }) {
                 entries[index].isEnabled = true
-                entries[index].useCount += 1
             } else {
                 entries.append(CorrectionEntry(heard: candidate.heard, corrected: candidate.corrected))
             }
+        }
+        persist()
+    }
+
+    /// Increments `useCount` for corrections that just fired for real in
+    /// `TextCleaner.applyCorrections`. This is the only place `useCount` moves,
+    /// so it means exactly "this correction changed a transcript N times" — not
+    /// "I taught this N times", which re-teaching the same pair via `confirm`
+    /// does not count as.
+    func recordApplied(_ ids: [UUID]) {
+        guard !ids.isEmpty else { return }
+        let idSet = Set(ids)
+        for index in entries.indices where idSet.contains(entries[index].id) {
+            entries[index].useCount += 1
         }
         persist()
     }

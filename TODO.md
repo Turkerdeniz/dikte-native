@@ -71,9 +71,18 @@ güncel indeksi kontrol edip doğru numarayla) ile geri getirilebilir — ama ş
 
 ---
 
-## Tanımlanmış, henüz uygulanmamış
+## Uygulandı
 
-### 2. CorrectionStore / "Düzelt ve öğret" — gerçek bir işlevsizlik bulundu
+### 2. CorrectionStore / "Düzelt ve öğret" — 6 Eylül 2026'da düzeltildi
+
+Aşağıdaki tanım (ve altındaki plan) 6 Eylül 2026'da uygulandı: `TextCleaner.
+applyCorrections` deterministik bulma-değiştirme katmanı eklendi, ölü
+`promptPairs` kaldırıldı, `useCount` artık yalnız gerçek uygulanmaları sayıyor
+(yeniden öğretme saymıyor) ve Ayarlar'da her düzeltmenin yanında "N kez devreye
+girdi" görünüyor. Aşağıdaki bölüm, sorunun neden gerçek olduğunu belgeleyen
+orijinal analiz olarak korunuyor.
+
+### (orijinal tanım — artık uygulandı) CorrectionStore / "Düzelt ve öğret"
 
 **Bağlam:** Kullanıcı, öğrenilen düzeltmelerin gerçekten işe yarayıp yaramadığından
 emin olamadığını belirtti. Kod incelemesi bunun **gerçek bir sebebi olduğunu**

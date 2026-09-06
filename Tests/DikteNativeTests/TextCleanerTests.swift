@@ -44,4 +44,38 @@ final class TextCleanerTests: XCTestCase {
         XCTAssertTrue(candidates[0].corrected.contains("ses"))
     }
 
+    func testApplyCorrectionsReplacesAConfirmedMatchAndReportsWhichFired() {
+        let entry = CorrectionEntry(heard: "Kodeks", corrected: "Codex")
+        let (text, appliedIDs) = TextCleaner.applyCorrections("Kodeks'e gönderiyorum.", entries: [entry])
+        XCTAssertEqual(text, "Codex'e gönderiyorum.")
+        XCTAssertEqual(appliedIDs, [entry.id])
+    }
+
+    func testApplyCorrectionsIsCaseInsensitive() {
+        let entry = CorrectionEntry(heard: "kodeks", corrected: "Codex")
+        let (text, appliedIDs) = TextCleaner.applyCorrections("KODEKS çalışıyor.", entries: [entry])
+        XCTAssertEqual(text, "Codex çalışıyor.")
+        XCTAssertEqual(appliedIDs, [entry.id])
+    }
+
+    func testApplyCorrectionsDoesNotFireOnAPartialWordMatch() {
+        let entry = CorrectionEntry(heard: "kod", corrected: "code")
+        let (text, appliedIDs) = TextCleaner.applyCorrections("Kodeks çalışmıyor.", entries: [entry])
+        XCTAssertEqual(text, "Kodeks çalışmıyor.")
+        XCTAssertTrue(appliedIDs.isEmpty)
+    }
+
+    func testApplyCorrectionsSkipsDisabledEntries() {
+        let entry = CorrectionEntry(heard: "Kodeks", corrected: "Codex", isEnabled: false)
+        let (text, appliedIDs) = TextCleaner.applyCorrections("Kodeks'e gönderiyorum.", entries: [entry])
+        XCTAssertEqual(text, "Kodeks'e gönderiyorum.")
+        XCTAssertTrue(appliedIDs.isEmpty)
+    }
+
+    func testApplyCorrectionsReportsNoMatchWhenTheHeardTermIsAbsent() {
+        let entry = CorrectionEntry(heard: "Kodeks", corrected: "Codex")
+        let (text, appliedIDs) = TextCleaner.applyCorrections("Bugün hava güzel.", entries: [entry])
+        XCTAssertEqual(text, "Bugün hava güzel.")
+        XCTAssertTrue(appliedIDs.isEmpty)
+    }
 }

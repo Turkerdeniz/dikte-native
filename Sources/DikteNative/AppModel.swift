@@ -454,7 +454,9 @@ final class AppModel: ObservableObject {
 
             performanceTracker?.begin("Metin temizleme")
             setStage(.cleaning)
-            let cleaned = TextCleaner.clean(raw)
+            let cleanedRaw = TextCleaner.clean(raw)
+            let (cleaned, appliedCorrectionIDs) = TextCleaner.applyCorrections(cleanedRaw, entries: corrections.entries)
+            corrections.recordApplied(appliedCorrectionIDs)
             let localResult = cleaned
             var final = localResult; var response: String?; var codexError: String?
             let route = RoutePolicy.destination(for: mode, duration: recording.duration,
@@ -614,7 +616,9 @@ final class AppModel: ObservableObject {
                                   vadRegions: [SpeechRegion],
                                   chunkDiagnostics: [ChunkTranscriptionDiagnostic],
                                   mode: CaptureMode) async {
-        let cleaned = TextCleaner.clean(partialText)
+        let cleanedRaw = TextCleaner.clean(partialText)
+        let (cleaned, appliedCorrectionIDs) = TextCleaner.applyCorrections(cleanedRaw, entries: corrections.entries)
+        corrections.recordApplied(appliedCorrectionIDs)
         if !cleaned.isEmpty {
             lastResult = cleaned
             _ = pasteService.copyAndOptionallyPaste(cleaned, shouldPaste: false)

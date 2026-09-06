@@ -231,6 +231,8 @@ private struct LocalModelSettingsView: View {
                                 .labelsHidden()
                             Text("\(entry.heard) → \(entry.corrected)")
                             Spacer()
+                            Text(entry.useCount > 0 ? "\(entry.useCount) kez devreye girdi" : "Henüz devreye girmedi")
+                                .font(.caption).foregroundStyle(.secondary)
                             Button(role: .destructive) { corrections.delete(id: entry.id) } label: { Image(systemName: "trash") }
                                 .buttonStyle(.borderless)
                         }

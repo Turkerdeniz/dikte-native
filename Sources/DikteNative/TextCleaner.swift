@@ -23,6 +23,32 @@ enum TextCleaner {
         value = value.replacingOccurrences(of: #"\s*\n\s*"#, with: "\n", options: .regularExpression)
         return value.trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    /// Deterministically applies confirmed "heard → corrected" corrections on top
+    /// of the cleaned transcript. This is separate from, and in addition to, the
+    /// soft vocabulary hint the same corrections give Whisper via `initial_prompt`
+    /// (see `CorrectionStore.promptTerms`): that hint only nudges recognition
+    /// probabilistically, so a taught correction with no deterministic follow-up
+    /// step had no guaranteed effect on the final text. Matching is whole-word,
+    /// case-insensitive, and does not fold diacritics — a correction should not
+    /// fire on a merely similar-looking word.
+    static func applyCorrections(_ text: String, entries: [CorrectionEntry]) -> (text: String, appliedIDs: [UUID]) {
+        var result = text
+        var appliedIDs: [UUID] = []
+        for entry in entries where entry.isEnabled {
+            let heard = entry.heard.trimmingCharacters(in: .whitespacesAndNewlines)
+            let corrected = entry.corrected.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !heard.isEmpty, !corrected.isEmpty else { continue }
+            let pattern = "\\b" + NSRegularExpression.escapedPattern(for: heard) + "\\b"
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { continue }
+            let fullRange = NSRange(result.startIndex..., in: result)
+            guard regex.firstMatch(in: result, range: fullRange) != nil else { continue }
+            let replacement = NSRegularExpression.escapedTemplate(for: corrected)
+            result = regex.stringByReplacingMatches(in: result, range: fullRange, withTemplate: replacement)
+            appliedIDs.append(entry.id)
+        }
+        return (result, appliedIDs)
+    }
 }
 
 enum TranscriptionPolicy {
