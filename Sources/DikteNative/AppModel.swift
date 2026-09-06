@@ -60,13 +60,14 @@ final class AppModel: ObservableObject {
         recoverUnexpectedCrash()
         removeLegacyAccurateModel()
         loginAtStartup = SMAppService.mainApp.status == .enabled
-        if settings.hotKey.matchesShortcut(.optionE) {
+        if settings.hotKey.matchesShortcut(settings.codingHotKey) {
             settings.hotKey = .optionD
-            alertMessage = "Ham kısayolu ⌥E ile çakıştığı için ⌥D’ye alındı; ⌥E Kısa ve Net modu için sabittir."
+            settings.codingHotKey = .optionE
+            alertMessage = "İki kısayol aynı kombinasyona ayarlanmıştı; varsayılanlara (⌥D / ⌥E) döndürüldü."
         }
         do {
-            if try !installHotKeys(settings.hotKey) {
-                alertMessage = "Kısa ve Net kısayolu (⌥E) kaydedilemedi. Ham kısayolu çalışmaya devam ediyor."
+            if try !installHotKeys(general: settings.hotKey, coding: settings.codingHotKey) {
+                alertMessage = "Kısa ve Net kısayolu (\(settings.codingHotKey.displayName)) kaydedilemedi. Ham kısayolu çalışmaya devam ediyor."
             }
         } catch {
             alertMessage = error.localizedDescription
@@ -227,18 +228,24 @@ final class AppModel: ObservableObject {
         overlay.hide()
     }
 
-    func applyHotKey(_ candidate: HotKeyConfiguration) -> Bool {
-        guard !candidate.matchesShortcut(.optionE) else {
-            alertMessage = "Ham kısayolu ⌥E ile çakışamaz; ⌥E Kısa ve Net modu için sabittir."
+    func applyHotKey(_ candidate: HotKeyConfiguration, for mode: CaptureMode) -> Bool {
+        let general = mode == .general ? candidate : settings.hotKey
+        let coding = mode == .coding ? candidate : settings.codingHotKey
+        guard !general.matchesShortcut(coding) else {
+            alertMessage = "Ham ve Kısa ve Net kısayolları aynı kombinasyon olamaz."
             return false
         }
         do {
-            let codingRegistered = try installHotKeys(candidate)
-            settings.hotKey = candidate
-            if !codingRegistered {
-                alertMessage = "Kısa ve Net kısayolu (⌥E) kaydedilemedi. Ham kısayolu çalışmaya devam ediyor."
+            let codingRegistered = try installHotKeys(general: general, coding: coding)
+            settings.hotKey = general
+            // A failed Coding registration leaves the previous one active, so the
+            // stored value must keep matching what is actually registered.
+            if codingRegistered {
+                settings.codingHotKey = coding
+            } else {
+                alertMessage = "Kısa ve Net kısayolu (\(coding.displayName)) kaydedilemedi; başka bir uygulama kullanıyor olabilir. Önceki kısayol korundu."
             }
-            return true
+            return mode == .general ? true : codingRegistered
         } catch {
             alertMessage = error.localizedDescription
             return false
@@ -292,8 +299,8 @@ final class AppModel: ObservableObject {
     func deleteDiagnosticCapture(id: UUID) { Task { await diagnosticStore.delete(id: id) } }
     func deleteAllDiagnosticCaptures() { Task { await diagnosticStore.deleteAll() } }
 
-    private func installHotKeys(_ configuration: HotKeyConfiguration) throws -> Bool {
-        try hotKey.register(general: configuration, coding: .optionE) { [weak self] mode in
+    private func installHotKeys(general: HotKeyConfiguration, coding: HotKeyConfiguration) throws -> Bool {
+        try hotKey.register(general: general, coding: coding) { [weak self] mode in
             self?.handleHotKey(mode)
         }
     }

@@ -13,7 +13,7 @@ Son doğrulama: 31 Ağustos 2026
 - VAD: gömülü Silero `v6.2.0`, doğrulanmış SHA-256
 - Varsayılan dil: Türkçe
 - Varsayılan kısayol: `⌥D`
-- Kısa ve Net modu: sabit `⌥E`; Ham `⌥D` akışı korunuyor
+- Kısa ve Net modu: varsayılan `⌥E`, artık Ham gibi Ayarlar'dan değiştirilebilir; `⌥D` akışı korunuyor
 - Codex eşiği: Ham mod için gerçek kayıt süresi kesin olarak `>30.0 saniye`; Kısa ve Net süre/eşik bağımsız
 - Codex: Ham Editing ve Kısa ve Net indirgeme sözleşmeleri ayrı; iki thread kimliği ve transkript JSON veri sınırı
 - Overlay: sol alt kompakt; aktif Space ve ön uygulamanın fiziksel ekranını otomatik takip eder; Ham turuncu, Kısa ve Net kırmızı dot kullanır

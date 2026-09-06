@@ -17,9 +17,11 @@ enum ProcessingStage: String, Codable, Sendable {
     }
 }
 
-enum CaptureMode: String, Codable, CaseIterable, Sendable {
+enum CaptureMode: String, Codable, CaseIterable, Sendable, Identifiable {
     case general
     case coding
+
+    var id: String { rawValue }
 
     var title: String {
         switch self {

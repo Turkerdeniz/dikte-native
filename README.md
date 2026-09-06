@@ -18,7 +18,7 @@ Dikte Native, Türker'in Apple Silicon MacBook'u için yazılmış yerel bir mac
 
 Konuşmanı kısaltıp netleştirmek için `⌥E` ile Kısa ve Net kaydını başlat; overlay üzerinde **Kısa ve Net modu** görünür. Tekrar `⌥E` ile durdur. Ham ve Kısa ve Net kısayolları aynı anda ya da işlem sürerken güvenli biçimde yok sayılır.
 
-Ham kısayolu Ayarlar'dan değiştirilebilir; Kısa ve Net `⌥E` sabittir. Yeni kombinasyon kaydedilemezse eski çalışan Ham kısayolu korunur.
+Her iki kısayol da Ayarlar'dan değiştirilebilir; ikisi aynı kombinasyon olamaz. Varsayılanlar `⌥D` (Ham) ve `⌥E` (Kısa ve Net)'tir. Yeni bir kombinasyon kaydedilemezse eski çalışan kısayol korunur.
 
 Kayıt göstergesi aktif macOS Space'ini ve odakta çalışılan uygulama penceresinin fiziksel ekranını otomatik izler. Ekran bilgisi alınamazsa imlecin bulunduğu ekrana düşer; bunun için Accessibility veya Screen Recording izni gerekmez.
 
@@ -73,7 +73,7 @@ Model Git deposuna veya uygulama paketine eklenmez. Kullanıcının açık eylem
 | Accessibility | `Cmd+V` olayını odaktaki uygulamaya göndermek | Transkripsiyon ve panoya kopyalama çalışır, yalnız otomatik yapıştırma yapılmaz. |
 | Bildirim | Kısa durum ve fallback bilgisi göstermek | Ana işlev çalışır; sistem bildirimi görünmez. |
 
-Global `⌥D` ve sabit `⌥E` kısayolları Carbon `RegisterEventHotKey` kullandığı için Accessibility izni istemez. Mikrofon/F5 consumer tuşu desteklenmez. `⌥E` kaydedilemezse Ham `⌥D` akışı çalışmaya devam eder ve açık hata gösterilir.
+Her iki global kısayol da Carbon `RegisterEventHotKey` kullandığı için Accessibility izni istemez. Mikrofon/F5 consumer tuşu desteklenmez. Kısa ve Net kısayolu kaydedilemezse Ham akışı çalışmaya devam eder ve açık hata gösterilir.
 
 ## Veri ve gizlilik
 

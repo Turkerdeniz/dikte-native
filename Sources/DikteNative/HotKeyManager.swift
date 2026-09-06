@@ -34,9 +34,9 @@ final class HotKeyManager {
 
     private let signature: OSType = 0x444B5445 // DKTE
 
-    /// Registers the configurable General shortcut and the fixed Coding shortcut.
-    /// A General registration failure is fatal; a Coding registration failure leaves
-    /// General active and is reported as `false` to the caller.
+    /// Registers both configurable shortcuts. A General registration failure is
+    /// fatal; a Coding registration failure leaves General active and any previous
+    /// Coding registration intact, and is reported as `false` to the caller.
     @discardableResult
     func register(general: HotKeyConfiguration, coding: HotKeyConfiguration,
                   callback: @escaping (CaptureMode) -> Void) throws -> Bool {

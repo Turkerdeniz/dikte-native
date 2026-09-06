@@ -71,12 +71,48 @@ final class CodingDictationTests: XCTestCase {
         XCTAssertNil(decodedLegacy.captureMode)
     }
 
-    func testCodingShortcutIsFixedAndDistinctFromGeneralShortcut() {
+    func testDefaultShortcutsAreDistinct() {
         XCTAssertEqual(HotKeyConfiguration.optionD.displayName, "⌥D")
         XCTAssertEqual(HotKeyConfiguration.optionE.displayName, "⌥E")
         XCTAssertNotEqual(HotKeyConfiguration.optionD.keyCode, HotKeyConfiguration.optionE.keyCode)
         XCTAssertFalse(HotKeyConfiguration.optionD.matchesShortcut(.optionE))
         XCTAssertTrue(HotKeyConfiguration.optionE.matchesShortcut(.optionE))
+    }
+
+    @MainActor
+    func testBothShortcutsAreIndependentlyConfigurable() {
+        let suite = "DikteNativeTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        XCTAssertEqual(settings.hotKey, .optionD)
+        XCTAssertEqual(settings.codingHotKey, .optionE)
+
+        let customCoding = HotKeyConfiguration(keyCode: 1, modifiers: 1 << 11, displayName: "⌥S")
+        settings.codingHotKey = customCoding
+        XCTAssertEqual(settings.hotKey, .optionD)
+        XCTAssertEqual(settings.codingHotKey, customCoding)
+
+        let reloaded = AppSettings(defaults: defaults)
+        XCTAssertEqual(reloaded.hotKey, .optionD)
+        XCTAssertEqual(reloaded.codingHotKey, customCoding)
+    }
+
+    @MainActor
+    func testSettingsRoundTripsAColliderWithoutResolvingIt() {
+        // Collision detection between the two shortcuts is AppModel's job (it runs
+        // once both are about to be installed), not AppSettings'; a stored General
+        // value that already matches the stored Coding value must simply round-trip
+        // here so AppModel has an accurate starting point to detect and fix.
+        let suite = "DikteNativeTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        if let data = try? JSONEncoder().encode(HotKeyConfiguration.optionE) {
+            defaults.set(data, forKey: "hotKey")
+        }
+        let settings = AppSettings(defaults: defaults)
+        XCTAssertEqual(settings.hotKey, .optionE)
+        XCTAssertEqual(settings.codingHotKey, .optionE)
     }
 
     func testHotKeyPolicyDoesNotCrossStopOrStartModes() {

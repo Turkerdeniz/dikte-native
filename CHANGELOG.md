@@ -2,6 +2,13 @@
 
 Bu dosya kullanıcıya ve bakım yapan geliştiriciye dönük önemli değişiklikleri özetler. Ayrıntılı teknik davranış için `docs/` belgelerine bak.
 
+## Çalışma ağacı — Kısa ve Net kısayolu artık ayarlanabilir — 6 Eylül 2026
+
+- Kısa ve Net kısayolu (`⌥E`) artık Ham kısayolu gibi Ayarlar'dan bağımsız olarak değiştirilebilir; sabit değil.
+- İki kısayol aynı kombinasyona ayarlanamaz; çakışma tespit edilirse (yeni kayıt sırasında veya başlangıçta) her ikisi de varsayılanlara (`⌥D` / `⌥E`) döner.
+- Bir kısayolun kaydı başarısız olursa diğeri etkilenmez ve önceki çalışan değeri korunur.
+- `⌥D` akışı, route politikası ve varsayılan davranış değişmedi.
+
 ## Çalışma ağacı — Kısa ve Net modu — 6 Eylül 2026
 
 - `⌥E` artık yapılandırılmış coding prompt üretmiyor; konuşmayı cevaplamadan kısa ve anlaşılır bir metne indirgiyor. Mod adları kullanıcı arayüzünde **Ham** (`⌥D`) ve **Kısa ve Net** (`⌥E`) olarak değişti.

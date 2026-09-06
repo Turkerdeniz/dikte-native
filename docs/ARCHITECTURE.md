@@ -36,7 +36,7 @@ flowchart LR
     L2 -->|hata / iptal / timeout| J
 ```
 
-İki kısayol aynı kayıt hattını paylaşır; `CaptureMode` capture başlangıcında seçilir ve asenkron işlem boyunca değişmeden taşınır. Ham kısayolu Ayarlar’dan değiştirilebilir, Kısa ve Net kısayolu `⌥E` olarak sabittir. Başlatma yarışında, karşı modun kaydı sürerken veya `processing` aşamasında gelen kısayol yok sayılır.
+İki kısayol aynı kayıt hattını paylaşır; `CaptureMode` capture başlangıcında seçilir ve asenkron işlem boyunca değişmeden taşınır. Her iki kısayol da Ayarlar’dan bağımsız olarak değiştirilebilir (varsayılan `⌥D` / `⌥E`); ikisi aynı kombinasyona ayarlanamaz, çakışma tespit edilirse varsayılanlara döner. Başlatma yarışında, karşı modun kaydı sürerken veya `processing` aşamasında gelen kısayol yok sayılır.
 
 ## Durum makinesi
 

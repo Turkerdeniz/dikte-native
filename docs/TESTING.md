@@ -70,7 +70,7 @@ Dry-run öncesi ve sonrası `/Applications/Dikte.app` ile Application Support in
 | `Codex`, `Whisper`, `Option D` içeren Türkçe | Doğrulanmış İngilizce terimler korunur |
 | Tam `30.0 sn` | Yerel pipeline |
 | `30.1 sn` ve üzeri | Kalıcı Codex thread; başarısızsa yerel fallback |
-| Ham kısayolu olarak `⌥E` kaydetme denemesi | Reddedilir; `⌥E` Kısa ve Net modu için sabit kalır |
+| Ham kısayolunu Kısa ve Net'in mevcut kombinasyonuyla aynı yapma denemesi | Reddedilir; her iki kısayol kendi önceki değerinde kalır |
 | Boş Whisper parçası | Özgün aralıktan retry; gerekirse bütün kayıt fallback |
 | Kurtarılamayan parça | Otomatik yapıştırma yok; kısmi metin panoda/History'de `incomplete` |
 | Accessibility kapalı | Transkripsiyon/pano çalışır, yalnız Cmd+V yapılmaz |

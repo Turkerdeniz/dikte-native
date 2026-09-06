@@ -47,7 +47,7 @@ private struct GeneralSettingsView: View {
     @ObservedObject private var settings: AppSettings
     @ObservedObject private var diagnosticStore: WhisperDiagnosticStore
     @ObservedObject private var audioMeter: AudioMeterState
-    @State private var recordingHotKey = false
+    @State private var recordingHotKeyMode: CaptureMode?
     @State private var confirmDeleteDiagnostics = false
     init(model: AppModel) {
         self.model = model
@@ -103,12 +103,13 @@ private struct GeneralSettingsView: View {
                 SectionCard("Kısayol") {
                     HStack {
                         Text("Ham kısayolu"); Spacer()
-                        Button(settings.hotKey.displayName) { recordingHotKey = true }.keyboardShortcut(.none)
+                        Button(settings.hotKey.displayName) { recordingHotKeyMode = .general }.keyboardShortcut(.none)
                     }
                     HStack {
-                        Text("Kısa ve Net"); Spacer(); Text(HotKeyConfiguration.optionE.displayName).foregroundStyle(.secondary)
+                        Text("Kısa ve Net kısayolu"); Spacer()
+                        Button(settings.codingHotKey.displayName) { recordingHotKeyMode = .coding }.keyboardShortcut(.none)
                     }
-                    Text("Varsayılan Ham kısayolu ⌥D’dir. Kısa ve Net modu için ⌥E sabittir; ikinci bir kısayol düzenleyicisi yoktur. Mikrofon/F5 tuşu kullanılmaz ve Erişilebilirlik izni gerekmez.")
+                    Text("Varsayılanlar Ham için ⌥D, Kısa ve Net için ⌥E’dir. İki kısayol aynı kombinasyon olamaz. Mikrofon/F5 tuşu kullanılmaz ve Erişilebilirlik izni gerekmez.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 SectionCard("Pano ve görünüm") {
@@ -164,7 +165,7 @@ private struct GeneralSettingsView: View {
                 }
             }.padding(20)
         }
-        .sheet(isPresented: $recordingHotKey) { HotKeyCaptureSheet(model: model, isPresented: $recordingHotKey) }
+        .sheet(item: $recordingHotKeyMode) { mode in HotKeyCaptureSheet(model: model, mode: mode, selection: $recordingHotKeyMode) }
         .confirmationDialog("Tüm geçici Whisper tanı kayıtları silinsin mi?", isPresented: $confirmDeleteDiagnostics) {
             Button("Tümünü sil", role: .destructive) { model.deleteAllDiagnosticCaptures() }
             Button("Vazgeç", role: .cancel) { }
@@ -538,15 +539,17 @@ private struct CorrectionEditSheet: View {
 
 private struct HotKeyCaptureSheet: View {
     @ObservedObject var model: AppModel
-    @Binding var isPresented: Bool
+    let mode: CaptureMode
+    @Binding var selection: CaptureMode?
     @State private var candidate: HotKeyConfiguration?
     var body: some View {
-        VStack(spacing: 18) {
-            Text("Yeni kısayola bas").font(.title2).bold()
+        VStack(spacing: 14) {
+            Text("\(mode.title) kısayolu").font(.title2).bold()
+            Text("Yeni kısayola bas").font(.callout).foregroundStyle(.secondary)
             Text(candidate?.displayName ?? "⌘ / ⌥ / ⌃ / ⇧ + bir tuş").font(.system(size: 30, weight: .semibold, design: .rounded)).frame(height: 54)
             KeyCaptureView(candidate: $candidate)
-            HStack { Button("Vazgeç") { isPresented = false }; Button("Kaydet") { if let candidate, model.applyHotKey(candidate) { isPresented = false } }.disabled(candidate == nil).buttonStyle(.borderedProminent) }
-        }.padding(28).frame(width: 400, height: 230)
+            HStack { Button("Vazgeç") { selection = nil }; Button("Kaydet") { if let candidate, model.applyHotKey(candidate, for: mode) { selection = nil } }.disabled(candidate == nil).buttonStyle(.borderedProminent) }
+        }.padding(28).frame(width: 400, height: 250)
     }
 }
 
