@@ -20,7 +20,7 @@ if [[ -f "$WORKSPACE_STATE" ]] && ! grep -Fq "\"location\" : \"$ROOT_DIR\"" "$WO
   rm -f "$WORKSPACE_STATE"
 fi
 
-security find-identity -v -p codesigning | rg -F "\"$IDENTITY\"" >/dev/null || {
+security find-identity -v -p codesigning | grep -F "\"$IDENTITY\"" >/dev/null || {
   print -u2 "Required signing identity is missing: $IDENTITY"
   print -u2 "Run scripts/setup-signing.sh once. Ad-hoc signing is intentionally disabled."
   exit 1
@@ -53,7 +53,7 @@ xattr -d 'com.apple.fileprovider.fpfs#P' "$CONTENTS/Frameworks/whisper.framework
 codesign --force --options runtime --timestamp=none --sign "$IDENTITY" "$CONTENTS/Frameworks/whisper.framework"
 codesign --force --options runtime --timestamp=none --entitlements "$ROOT_DIR/Resources/Dikte.entitlements" --sign "$IDENTITY" "$APP_DIR"
 codesign --verify --deep --strict --verbose=2 "$APP_DIR"
-codesign -d --entitlements :- "$APP_DIR" 2>&1 | rg -q 'com.apple.security.device.audio-input' || {
+codesign -d --entitlements :- "$APP_DIR" 2>&1 | grep -q 'com.apple.security.device.audio-input' || {
   print -u2 "Signed app is missing the audio-input entitlement."
   exit 1
 }

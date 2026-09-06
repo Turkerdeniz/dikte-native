@@ -6,7 +6,7 @@ Uygulama yalnız bu Mac için oluşturulan `Dikte Native Local Signing` kimliği
 
 ```sh
 ./scripts/setup-signing.sh
-security find-identity -v -p codesigning | rg 'Dikte Native Local Signing'
+security find-identity -v -p codesigning | grep 'Dikte Native Local Signing'
 ```
 
 `setup-signing.sh` geçici anahtar, sertifika ve PKCS#12 dosyalarını `/private/tmp` altında oluşturur; işlem sonunda geçici dizini temizler. Kimlik yoksa `build.sh` durur.

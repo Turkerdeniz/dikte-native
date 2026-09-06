@@ -94,7 +94,7 @@ Yeni `.ips` dosyasının tarihi ve stack'i güncel build ile eşleştirilmeden e
 
 ```sh
 mdfind 'kMDItemCFBundleIdentifier == "com.turkerdenizer.dikte.native"'
-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -dump | rg -n 'com.turkerdenizer.dikte.native|path:.*Dikte'
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -dump | grep -nE 'com.turkerdenizer.dikte.native|path:.*Dikte'
 ```
 
 Yalnız `/Applications/Dikte.app` varsa ikinci ikon çoğunlukla istemci uygulamanın önbelleğidir. Uygulamayı kapatıp açmak veya macOS oturumunu yenilemek yeterlidir. Eski gerçek `.app` yolu varsa önce onu Çöp'e taşı ve güncel uygulamayı tekrar kaydet:

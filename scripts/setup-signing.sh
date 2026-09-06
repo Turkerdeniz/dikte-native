@@ -4,7 +4,7 @@ set -euo pipefail
 IDENTITY="Dikte Native Local Signing"
 ROOT_DIR="${0:A:h:h}"
 
-if security find-identity -v -p codesigning | rg -F "\"$IDENTITY\"" >/dev/null; then
+if security find-identity -v -p codesigning | grep -F "\"$IDENTITY\"" >/dev/null; then
   print "Signing identity already exists: $IDENTITY"
   exit 0
 fi
@@ -21,7 +21,7 @@ security import "$TEMP_DIR/identity.p12" -k "$HOME/Library/Keychains/login.keych
   -P dikte-native-local -T /usr/bin/codesign -T /usr/bin/security
 security add-trusted-cert -d -r trustRoot -k "$HOME/Library/Keychains/login.keychain-db" "$TEMP_DIR/cert.pem"
 
-security find-identity -v -p codesigning | rg -F "\"$IDENTITY\"" >/dev/null || {
+security find-identity -v -p codesigning | grep -F "\"$IDENTITY\"" >/dev/null || {
   print -u2 "Signing identity could not be installed: $IDENTITY"
   exit 1
 }
