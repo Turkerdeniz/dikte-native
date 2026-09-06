@@ -104,7 +104,7 @@ Codex:
 - Application Support içindeki boş `CodexRuntime` dizininde çalışır,
 - `thread.started` kimliğini gelir gelmez moda ait UserDefaults anahtarına yazar,
 - Ham ve Kısa ve Net sonraki çağrılarda ayrı kalıcı thread'lerini resume eder,
-- 240 saniye timeout uygular.
+- 120 saniye timeout uygular.
 
 Thread kayıpsa ilgili mod için bir kez yeni thread denenir. Her hata, timeout ve iptal temizlenmiş yerel metne düşer. Kısa ve Net thread'i Ham thread'inden bağımsızdır; yeni Kısa ve Net konuşması yalnız kendi anahtarını sıfırlar.
 Sözleşmenin eklendiği ilk migrasyon eski Ham editör thread'ini bir kez temizler; ikinci thread anahtarı da feature migrasyonunda temizlenir ve sonraki açılışlarda ayrı tutulur.

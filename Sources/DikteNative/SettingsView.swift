@@ -86,7 +86,7 @@ private struct GeneralSettingsView: View {
                     }
                     Picker("Dil", selection: $settings.language) { ForEach(RecognitionLanguage.allCases) { Text($0.title).tag($0) } }
                     HStack { Text("Maksimum kayıt"); Spacer(); Text("\(Int(settings.maximumRecording / 60)) dakika").foregroundStyle(.secondary) }
-                    Slider(value: $settings.maximumRecording, in: 60...600, step: 60)
+                    Slider(value: $settings.maximumRecording, in: 60...300, step: 60)
                     Divider()
                     HStack {
                         Label(microphonePermissionTitle,

@@ -38,7 +38,7 @@ Kesin test sayısını burada sabitleme; güncel sayı için test çıktısını
 - Genel dağıtım/notarization yok; yerel imza yalnız bu Mac için.
 - Whisper hızlı, düşük sesli veya başka insanların konuştuğu gürültülü ortamda kusursuz değildir.
 - Voice Processing ve Qwen metin düzeltici bu sürümde yoktur.
-- Codex gecikmesi yerel transkripsiyondan bağımsızdır ve 240 saniye timeout'a sahiptir.
+- Codex gecikmesi yerel transkripsiyondan bağımsızdır ve 120 saniye timeout'a sahiptir.
 - Otomatik yapıştırma Accessibility iznine bağlıdır; panoya kopyalama bağlı değildir.
 - Hoparlör sesi/audio loopback ortamı yoksa gerçek mikrofonla `⌥D`/`⌥E` manuel QA çalıştırılmadı; bu, otomatik testlerin kapsamı dışındaki runtime doğrulamasıdır.
 

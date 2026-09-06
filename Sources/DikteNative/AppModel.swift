@@ -846,7 +846,7 @@ final class AppModel: ObservableObject {
 
     private func askCodex(_ text: String, threadID: String?, mode: CaptureMode) async throws -> CodexResult {
         let promptKind: CodexPromptKind = mode == .coding ? .concise : .editing
-        return try await withTimeout(seconds: 240) {
+        return try await withTimeout(seconds: 120) {
             try await self.codex.ask(transcript: text, existingThreadID: threadID, promptKind: promptKind) { id in
                 Task { @MainActor in self.setCodexThreadID(id, for: mode) }
             }
