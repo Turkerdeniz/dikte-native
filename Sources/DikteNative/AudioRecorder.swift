@@ -1,6 +1,12 @@
 @preconcurrency import AVFoundation
+import AudioToolbox
+import CoreAudio
 import CoreMedia
 import Foundation
+
+/// The waveform is presentation-only; this maps a linear RMS value to a
+/// perceptually smoother display level. Shared by every capture driver.
+private func displayLevel(forRMS rms: Float) -> Float { min(1, pow(max(0, rms), 0.45) * 1.8) }
 
 private final class SampleAccumulator: @unchecked Sendable {
     private let lock = NSLock()
@@ -45,6 +51,12 @@ private final class SampleAccumulator: @unchecked Sendable {
         }
     }
 
+    func noteVoiceProcessingFallback(_ description: String) {
+        lock.withLock {
+            diagnostics.voiceProcessingFallbackReason = description
+        }
+    }
+
     func noteConversionError(_ description: String) {
         lock.withLock {
             diagnostics.conversionErrors += 1
@@ -78,8 +90,13 @@ private final class SampleAccumulator: @unchecked Sendable {
     }
 }
 
+/// A single-shot flag for `AVAudioConverter`'s input block: the source buffer
+/// is handed over once, then the block reports no more data. `@unchecked
+/// Sendable` because the converter invokes it synchronously on the calling
+/// thread, never concurrently.
+private final class ConverterInputState: @unchecked Sendable { var supplied = false }
+
 private final class CaptureOutputDelegate: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, @unchecked Sendable {
-    private final class InputState: @unchecked Sendable { var supplied = false }
     let queue = DispatchQueue(label: "com.turkerdenizer.dikte.audio-samples", qos: .userInteractive)
     private let accumulator: SampleAccumulator
     private let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000,
@@ -117,8 +134,7 @@ private final class CaptureOutputDelegate: NSObject, AVCaptureAudioDataOutputSam
             // fluid without coupling visual refreshes to the full audio callback rate.
             if now - lastLevelDelivery >= 1.0 / 30.0, let onLevel {
                 lastLevelDelivery = now
-                let displayLevel = min(1, pow(max(0, rms), 0.45) * 1.8)
-                onLevel(displayLevel)
+                onLevel(displayLevel(forRMS: rms))
             }
         } catch {
             accumulator.noteConversionError(error.localizedDescription)
@@ -175,7 +191,7 @@ private final class CaptureOutputDelegate: NSObject, AVCaptureAudioDataOutputSam
             throw DikteError.message("Dönüştürülmüş ses tamponu oluşturulamadı.")
         }
         output.frameLength = 0
-        let inputState = InputState()
+        let inputState = ConverterInputState()
         var conversionError: NSError?
         let status = converter.convert(to: output, error: &conversionError) { _, inputStatus in
             if inputState.supplied {
@@ -264,6 +280,179 @@ private final class CaptureSessionDriver: @unchecked Sendable {
     }
 }
 
+/// Resolves the CoreAudio `AudioDeviceID` behind an `AVCaptureDevice`'s unique
+/// ID string. `AVAudioEngine` only exposes device selection through the
+/// underlying `AudioUnit`, which needs a CoreAudio device ID, not the
+/// AVFoundation-level UID string.
+private func audioDeviceID(forUniqueID uid: String) -> AudioDeviceID? {
+    var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDevices,
+                                              mScope: kAudioObjectPropertyScopeGlobal,
+                                              mElement: kAudioObjectPropertyElementMain)
+    var size: UInt32 = 0
+    guard AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size) == noErr,
+          size > 0 else { return nil }
+    let count = Int(size) / MemoryLayout<AudioDeviceID>.size
+    var ids = [AudioDeviceID](repeating: 0, count: count)
+    guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &ids) == noErr else {
+        return nil
+    }
+    for id in ids {
+        var uidAddress = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyDeviceUID,
+                                                     mScope: kAudioObjectPropertyScopeGlobal,
+                                                     mElement: kAudioObjectPropertyElementMain)
+        var cfUID: CFString?
+        var uidSize = UInt32(MemoryLayout<CFString?>.size)
+        let status = withUnsafeMutablePointer(to: &cfUID) { pointer -> OSStatus in
+            pointer.withMemoryRebound(to: UnsafeMutableRawPointer?.self, capacity: 1) { raw in
+                AudioObjectGetPropertyData(id, &uidAddress, 0, nil, &uidSize, raw)
+            }
+        }
+        if status == noErr, let deviceUID = cfUID as String?, deviceUID == uid { return id }
+    }
+    return nil
+}
+
+/// Captures through macOS Voice Processing I/O, which applies Apple's own noise
+/// suppression, echo cancellation and automatic gain control before the samples
+/// reach us. Two ordering rules make this work, both established empirically
+/// against real hardware:
+///
+/// 1. The device is pinned *before* `setVoiceProcessingEnabled(true)`. Pinning
+///    afterwards leaves the node describing itself with a format the engine then
+///    refuses to initialise with (`kAudioUnitErr_FailedInitialization`, -10875).
+/// 2. The tap keeps the node's own sample rate and only reduces the channel
+///    count to one. Voice Processing I/O accepts a client format at exactly the
+///    rate it reports and nothing else — asking for the final 16 kHz directly at
+///    the tap fails engine startup with the same -10875, whatever the channel
+///    count. Resampling is therefore a separate `AVAudioConverter` step below.
+///
+/// The reported rate is read at runtime rather than assumed: on this hardware
+/// the node describes itself as 16 kHz once configured this way, so the
+/// converter is close to an identity transform, but that is an observation
+/// about one machine and not a guarantee.
+private final class VoiceProcessingCaptureDriver: @unchecked Sendable {
+    private let queue = DispatchQueue(label: "com.turkerdenizer.dikte.audio-voiceprocessing", qos: .userInitiated)
+    private var engine: AVAudioEngine?
+    private let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000,
+                                             channels: 1, interleaved: false)!
+
+    func start(device: AVCaptureDevice, accumulator: SampleAccumulator,
+               onFirstSample: @escaping @MainActor @Sendable () -> Void,
+               onLevel: @escaping @Sendable (Float) -> Void) async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            queue.async {
+                do {
+                    self.stopLocked()
+                    let engine = AVAudioEngine()
+                    let input = engine.inputNode
+                    try Self.pin(input, to: device)
+                    try input.setVoiceProcessingEnabled(true)
+
+                    let nativeFormat = input.outputFormat(forBus: 0)
+                    guard let monoFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32,
+                                                         sampleRate: nativeFormat.sampleRate,
+                                                         channels: 1, interleaved: false) else {
+                        throw DikteError.message("Gürültü bastırma formatı oluşturulamadı.")
+                    }
+                    guard let converter = AVAudioConverter(from: monoFormat, to: self.targetFormat) else {
+                        throw DikteError.message("Gürültü bastırma dönüştürücüsü kurulamadı.")
+                    }
+
+                    var deliveredFirstSample = false
+                    // One level per displayed frame. The engine hands over about
+                    // 100 ms at a time regardless of the buffer size asked for, and
+                    // the waveform advances one bar per level, so emitting a single
+                    // level per callback would scroll the display at a tenth of its
+                    // frame rate. The audio for those frames is already in hand, so
+                    // it is measured per window and handed over as separate levels
+                    // that `AudioLevelSink` holds and the meter spreads back out.
+                    let levelWindow = max(1, Int(self.targetFormat.sampleRate / 30))
+                    input.installTap(onBus: 0, bufferSize: 2048, format: monoFormat) { buffer, _ in
+                        guard let output = AVAudioPCMBuffer(
+                            pcmFormat: self.targetFormat,
+                            frameCapacity: AVAudioFrameCount(
+                                ceil(Double(buffer.frameLength) * self.targetFormat.sampleRate / monoFormat.sampleRate) + 16)
+                        ) else { accumulator.noteConversionError("Gürültü bastırma tamponu oluşturulamadı"); return }
+                        let inputState = ConverterInputState()
+                        var conversionError: NSError?
+                        let status = converter.convert(to: output, error: &conversionError) { _, inputStatus in
+                            if inputState.supplied { inputStatus.pointee = .noDataNow; return nil }
+                            inputState.supplied = true
+                            inputStatus.pointee = .haveData
+                            return buffer
+                        }
+                        guard conversionError == nil, status != .error, output.frameLength > 0,
+                              let channel = output.floatChannelData?[0] else {
+                            accumulator.noteConversionError(conversionError?.localizedDescription ?? "Gürültü bastırma dönüşümü başarısız")
+                            return
+                        }
+                        let values = UnsafeBufferPointer(start: channel, count: Int(output.frameLength))
+                        _ = accumulator.append(values, inputFormat: "Voice Processing I/O · \(Int(nativeFormat.sampleRate)) Hz")
+                        if !deliveredFirstSample {
+                            deliveredFirstSample = true
+                            Task { @MainActor in onFirstSample() }
+                        }
+                        var windowStart = 0
+                        while windowStart < values.count {
+                            let windowEnd = min(windowStart + levelWindow, values.count)
+                            var squared: Float = 0
+                            for index in windowStart..<windowEnd { squared += values[index] * values[index] }
+                            onLevel(displayLevel(forRMS: sqrt(squared / Float(windowEnd - windowStart))))
+                            windowStart = windowEnd
+                        }
+                    }
+
+                    engine.prepare()
+                    try engine.start()
+                    self.engine = engine
+                    continuation.resume()
+                } catch {
+                    self.stopLocked()
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    func stop() async {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                self.stopLocked()
+                continuation.resume()
+            }
+        }
+    }
+
+    func stopSoon() { queue.async { self.stopLocked() } }
+
+    private func stopLocked() {
+        if let engine {
+            engine.inputNode.removeTap(onBus: 0)
+            engine.stop()
+        }
+        engine = nil
+    }
+
+    /// Pins the engine's input to the given device so enabling this option never
+    /// silently switches away from the MacBook's built-in microphone, matching
+    /// the app's existing invariant of never touching the system's input device.
+    private static func pin(_ input: AVAudioInputNode, to device: AVCaptureDevice) throws {
+        guard let deviceID = audioDeviceID(forUniqueID: device.uniqueID) else {
+            throw DikteError.message("Gürültü bastırma için mikrofon donanım kimliği bulunamadı.")
+        }
+        guard let audioUnit = input.audioUnit else {
+            throw DikteError.message("Gürültü bastırma ses birimi alınamadı.")
+        }
+        var mutableDeviceID = deviceID
+        let status = AudioUnitSetProperty(audioUnit, kAudioOutputUnitProperty_CurrentDevice,
+                                          kAudioUnitScope_Global, 0, &mutableDeviceID,
+                                          UInt32(MemoryLayout<AudioDeviceID>.size))
+        guard status == noErr else {
+            throw DikteError.message("Gürültü bastırma mikrofona sabitlenemedi (\(status)).")
+        }
+    }
+}
+
 struct AudioCapture: Sendable {
     let samples: [Float]
     let sampleRate: Double
@@ -286,39 +475,136 @@ struct AudioCapture: Sendable {
 
 enum AudioPreprocessor {
     static let targetRate = 16_000.0
+    /// The lowest level ever treated as speech, regardless of what the room
+    /// sounds like. The adaptive threshold below never goes under this, so a
+    /// near-silent recording behaves exactly as it did before adaptivity existed.
     static let speechThreshold: Float = 0.008
+    static let frameSize = 320
+    /// Speech is taken to start this far above the measured noise floor…
+    static let noiseFloorMultiplier: Float = 3.0
+    /// …but never above this share of the loud end of the recording, so a
+    /// recording with no real pauses (where the "floor" is itself speech) can
+    /// never raise the threshold high enough to clip the words themselves.
+    static let speechLevelCeilingShare: Float = 0.25
+    /// Below this separation between the quiet and loud ends there is nothing to
+    /// adapt to, and the fixed threshold is used instead.
+    static let minimumSeparation: Float = 2.0
+    /// Rumble from fans, air conditioning and desk knocks sits below this and
+    /// carries no speech: Whisper is trained on 16 kHz mel spectrograms where
+    /// this band contributes nothing, but the energy still eats headroom and
+    /// inflates every frame's RMS, which is what the voiced-frame detection
+    /// below measures.
+    static let highPassCutoff = 80.0
 
     struct Result: Equatable, Sendable {
         let samples: [Float]
         let voicedDuration: TimeInterval
+        let noiseFloor: Float
+        let threshold: Float
+
+        init(samples: [Float], voicedDuration: TimeInterval, noiseFloor: Float = 0,
+             threshold: Float = AudioPreprocessor.speechThreshold) {
+            self.samples = samples
+            self.voicedDuration = voicedDuration
+            self.noiseFloor = noiseFloor
+            self.threshold = threshold
+        }
     }
 
     static func prepare(_ capture: AudioCapture) -> Result {
-        let converted = resample(capture.samples, from: capture.sampleRate, to: targetRate)
+        let converted = highPassed(resample(capture.samples, from: capture.sampleRate, to: targetRate),
+                                   sampleRate: targetRate)
         guard !converted.isEmpty else { return Result(samples: [], voicedDuration: 0) }
-        let frameSize = 320
+        let levels = frameLevels(converted)
+        let profile = noiseProfile(forFrameLevels: levels)
         var firstVoiced: Int?
         var lastVoiced: Int?
         var voicedFrames = 0
-        var start = 0
-        while start < converted.count {
-            let end = min(start + frameSize, converted.count)
-            var sum: Float = 0
-            for value in converted[start..<end] { sum += value * value }
-            let rms = sqrt(sum / Float(max(1, end - start)))
-            if rms >= speechThreshold {
-                firstVoiced = firstVoiced ?? start
-                lastVoiced = end
-                voicedFrames += 1
-            }
-            start = end
+        for (index, level) in levels.enumerated() where level >= profile.threshold {
+            let start = index * frameSize
+            firstVoiced = firstVoiced ?? start
+            lastVoiced = min(start + frameSize, converted.count)
+            voicedFrames += 1
         }
-        guard let firstVoiced, let lastVoiced else { return Result(samples: [], voicedDuration: 0) }
+        guard let firstVoiced, let lastVoiced else {
+            return Result(samples: [], voicedDuration: 0, noiseFloor: profile.noiseFloor,
+                          threshold: profile.threshold)
+        }
         let padding = Int(targetRate * 0.12)
         let lower = max(0, firstVoiced - padding)
         let upper = min(converted.count, lastVoiced + padding)
         return Result(samples: Array(converted[lower..<upper]),
-                      voicedDuration: Double(voicedFrames * frameSize) / targetRate)
+                      voicedDuration: Double(voicedFrames * frameSize) / targetRate,
+                      noiseFloor: profile.noiseFloor, threshold: profile.threshold)
+    }
+
+    static func frameLevels(_ samples: [Float]) -> [Float] {
+        guard !samples.isEmpty else { return [] }
+        var levels: [Float] = []
+        levels.reserveCapacity(samples.count / frameSize + 1)
+        var start = 0
+        while start < samples.count {
+            let end = min(start + frameSize, samples.count)
+            var sum: Float = 0
+            for value in samples[start..<end] { sum += value * value }
+            levels.append(sqrt(sum / Float(max(1, end - start))))
+            start = end
+        }
+        return levels
+    }
+
+    /// Picks the level that separates speech from room noise for *this* recording.
+    ///
+    /// The fixed 0.008 this replaced was an absolute level, so in a room whose
+    /// noise floor already sits above it every frame counted as voiced: the
+    /// silence trim did nothing and `voicedDuration` — which the caller uses as
+    /// the speech-duration signal whenever the VAD does not produce regions —
+    /// reported the whole recording as speech. Percentiles are used rather than
+    /// the leading samples because a recording need not begin with silence.
+    static func noiseProfile(forFrameLevels levels: [Float]) -> (noiseFloor: Float, threshold: Float) {
+        guard !levels.isEmpty else { return (0, speechThreshold) }
+        let sorted = levels.sorted()
+        let noiseFloor = percentile(sorted, 0.10)
+        let speechLevel = percentile(sorted, 0.90)
+        guard noiseFloor > 0, speechLevel > noiseFloor * minimumSeparation else {
+            return (noiseFloor, speechThreshold)
+        }
+        let candidate = min(noiseFloor * noiseFloorMultiplier, speechLevel * speechLevelCeilingShare)
+        return (noiseFloor, max(speechThreshold, candidate))
+    }
+
+    private static func percentile(_ sorted: [Float], _ fraction: Double) -> Float {
+        guard !sorted.isEmpty else { return 0 }
+        let index = Int((Double(sorted.count - 1) * fraction).rounded())
+        return sorted[max(0, min(sorted.count - 1, index))]
+    }
+
+    /// A second-order Butterworth high-pass, applied once in the forward
+    /// direction. The phase shift it introduces is irrelevant to Whisper, which
+    /// consumes a magnitude mel spectrogram.
+    static func highPassed(_ samples: [Float], sampleRate: Double,
+                           cutoff: Double = highPassCutoff) -> [Float] {
+        guard samples.count > 2, sampleRate > 0, cutoff > 0, cutoff < sampleRate / 2 else { return samples }
+        let w0 = 2.0 * Double.pi * cutoff / sampleRate
+        let cosW0 = cos(w0)
+        let alpha = sin(w0) / (2.0 * 0.707_106_781_2)
+        let a0 = 1 + alpha
+        let b0 = Float(((1 + cosW0) / 2) / a0)
+        let b1 = Float((-(1 + cosW0)) / a0)
+        let b2 = b0
+        let a1 = Float((-2 * cosW0) / a0)
+        let a2 = Float((1 - alpha) / a0)
+
+        var output = [Float](repeating: 0, count: samples.count)
+        var x1: Float = 0, x2: Float = 0, y1: Float = 0, y2: Float = 0
+        for index in 0..<samples.count {
+            let x0 = samples[index]
+            let y0 = b0 * x0 + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+            output[index] = y0
+            x2 = x1; x1 = x0
+            y2 = y1; y1 = y0
+        }
+        return output
     }
 
     static func resample(_ samples: [Float], from sourceRate: Double, to targetRate: Double) -> [Float] {
@@ -345,7 +631,9 @@ enum AudioResampler {
 
 @MainActor
 final class AudioRecorder {
-    private let driver = CaptureSessionDriver()
+    private let plainDriver = CaptureSessionDriver()
+    private let voiceProcessingDriver = VoiceProcessingCaptureDriver()
+    private var usingVoiceProcessing = false
     private let accumulator = SampleAccumulator()
     private var startedAt: Date?
     private var restartCount = 0
@@ -367,7 +655,7 @@ final class AudioRecorder {
         }
     }
 
-    func start(restarting: Bool = false,
+    func start(restarting: Bool = false, noiseSuppression: Bool = false,
                onFirstSample: @escaping @MainActor @Sendable () -> Void,
                onLevel: @escaping @Sendable (Float) -> Void) async throws {
         guard let device = Self.builtInMicrophone() else {
@@ -377,12 +665,28 @@ final class AudioRecorder {
         builtInInputName = device.localizedName
         builtInInputID = device.uniqueID
         accumulator.reset(device: device, restartCount: restartCount)
-        try await driver.start(device: device, accumulator: accumulator,
-                               onFirstSample: onFirstSample, onLevel: onLevel)
+        usingVoiceProcessing = false
+        if noiseSuppression {
+            do {
+                try await voiceProcessingDriver.start(device: device, accumulator: accumulator,
+                                                      onFirstSample: onFirstSample, onLevel: onLevel)
+                usingVoiceProcessing = true
+                return
+            } catch {
+                // Voice Processing I/O is the optional path, so a machine that
+                // refuses it must still be able to dictate. Fall through to the
+                // plain capture session rather than losing the recording, and
+                // leave the reason in the diagnostics attached to this capture.
+                await voiceProcessingDriver.stop()
+                accumulator.noteVoiceProcessingFallback(error.localizedDescription)
+            }
+        }
+        try await plainDriver.start(device: device, accumulator: accumulator,
+                                    onFirstSample: onFirstSample, onLevel: onLevel)
     }
 
     func stop() async -> AudioCapture {
-        await driver.stop()
+        if usingVoiceProcessing { await voiceProcessingDriver.stop() } else { await plainDriver.stop() }
         let duration = startedAt.map { Date().timeIntervalSince($0) } ?? 0
         startedAt = nil
         return accumulator.take(duration: duration)
@@ -394,7 +698,7 @@ final class AudioRecorder {
     }
 
     func stopImmediately() {
-        driver.stopSoon()
+        if usingVoiceProcessing { voiceProcessingDriver.stopSoon() } else { plainDriver.stopSoon() }
         startedAt = nil
     }
 

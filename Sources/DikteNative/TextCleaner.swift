@@ -64,6 +64,31 @@ enum TranscriptionPolicy {
         "abone olmayı unutmayın"
     ].sorted { $0.count > $1.count }
 
+    /// Whisper reports a probability per decoded token, and the app already
+    /// aggregates two summaries of them: the mean, and the share that fall below
+    /// `ChunkAcceptancePolicy.weakTokenThreshold`. Until now both were only
+    /// recorded for display. A transcript invented over noise or silence has a
+    /// characteristic signature in that pair — a low mean *and* most tokens weak —
+    /// whereas genuine speech recorded badly usually still contains confident
+    /// anchors that keep one of the two in normal territory. Both conditions are
+    /// therefore required, and very short outputs are exempt because a handful of
+    /// tokens makes the mean too noisy to judge.
+    ///
+    /// This deliberately does not reject the text. A false positive here would
+    /// throw away something the user actually said, so the caller downgrades the
+    /// result — the transcript still reaches the clipboard and History — rather
+    /// than discarding it.
+    static let hallucinationMeanProbability: Float = 0.35
+    static let hallucinationWeakTokenRatio: Float = 0.60
+    static let minimumTokensForConfidenceJudgement = 4
+
+    static func isConfidenceTooLow(meanTokenProbability: Float, lowConfidenceTokenRatio: Float,
+                                   tokenCount: Int) -> Bool {
+        guard tokenCount >= minimumTokensForConfidenceJudgement else { return false }
+        return meanTokenProbability < hallucinationMeanProbability
+            && lowConfidenceTokenRatio > hallucinationWeakTokenRatio
+    }
+
     static func accepts(_ text: String, voicedDuration: TimeInterval) -> Bool {
         guard voicedDuration >= 0.20 else { return false }
         let normalized = normalize(text)

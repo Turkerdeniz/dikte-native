@@ -177,25 +177,38 @@ struct AudioDiagnostics: Codable, Equatable, Sendable {
     var transcriptionChunkCount: Int = 0
     var vadSpeechDuration: TimeInterval = 0
     var vadFallbackReason: String?
+    /// Set when the noise-suppression toggle was on but Voice Processing I/O
+    /// could not start, so the recording silently used the plain capture path.
+    var voiceProcessingFallbackReason: String?
+    /// The measured room noise level and the speech threshold derived from it
+    /// for this recording. Recorded so a noisy-room complaint can be checked
+    /// against numbers instead of impressions, and so the noise-suppression
+    /// toggle can be compared with itself on and off.
+    var noiseFloor: Float = 0
+    var speechThreshold: Float = 0
 
     init(deviceID: String = "", deviceName: String = "", inputFormat: String = "",
          callbackCount: Int = 0, sampleCount: Int = 0, peakLevel: Float = 0,
          rmsLevel: Float = 0, voicedDuration: TimeInterval = 0, restartCount: Int = 0,
          conversionErrors: Int = 0, vadSegmentCount: Int = 0,
          transcriptionChunkCount: Int = 0, vadSpeechDuration: TimeInterval = 0,
-         vadFallbackReason: String? = nil) {
+         vadFallbackReason: String? = nil, voiceProcessingFallbackReason: String? = nil,
+         noiseFloor: Float = 0, speechThreshold: Float = 0) {
         self.deviceID = deviceID; self.deviceName = deviceName; self.inputFormat = inputFormat
         self.callbackCount = callbackCount; self.sampleCount = sampleCount
         self.peakLevel = peakLevel; self.rmsLevel = rmsLevel; self.voicedDuration = voicedDuration
         self.restartCount = restartCount; self.conversionErrors = conversionErrors
         self.vadSegmentCount = vadSegmentCount; self.transcriptionChunkCount = transcriptionChunkCount
         self.vadSpeechDuration = vadSpeechDuration; self.vadFallbackReason = vadFallbackReason
+        self.voiceProcessingFallbackReason = voiceProcessingFallbackReason
+        self.noiseFloor = noiseFloor; self.speechThreshold = speechThreshold
     }
 
     private enum CodingKeys: String, CodingKey {
         case deviceID, deviceName, inputFormat, callbackCount, sampleCount, peakLevel, rmsLevel
         case voicedDuration, restartCount, conversionErrors, vadSegmentCount, transcriptionChunkCount
-        case vadSpeechDuration, vadFallbackReason
+        case vadSpeechDuration, vadFallbackReason, voiceProcessingFallbackReason
+        case noiseFloor, speechThreshold
     }
 
     init(from decoder: Decoder) throws {

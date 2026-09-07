@@ -12,21 +12,35 @@ private struct AudioMeterSample: Sendable {
     let emittedAt: ContinuousClock.Instant
 }
 
-/// A thread-safe, single-slot handoff from CoreAudio to the presentation layer.
-/// The callback only replaces the newest value and signals the consumer; it never
-/// creates an unbounded queue of MainActor jobs.
+/// A thread-safe, small bounded handoff from CoreAudio to the presentation layer.
+/// The callback appends to a queue that can never exceed `maximumPending`, so it
+/// still cannot create an unbounded backlog of MainActor jobs, and the consumer
+/// below still paces itself independently of how fast this is fed.
+///
+/// The queue holds more than one sample because the capture drivers do not
+/// deliver at the same cadence. The plain capture session hands over a buffer
+/// roughly every 20–30 ms, but Voice Processing I/O delivers one every 100 ms
+/// whatever buffer size is requested — the engine ignores the hint. Since the
+/// waveform advances one bar per rendered sample, a single-slot handoff turned
+/// that into a visibly stepping display: ten bars per second instead of thirty.
+/// The voice-processing driver therefore splits its buffer into frame-sized
+/// windows and hands over each one, and this queue keeps them so the consumer
+/// can spread them across the frames they actually represent.
 final class AudioLevelSink: @unchecked Sendable {
+    static let maximumPending = 4
+
     private let lock = NSLock()
     private let continuation: AsyncStream<Void>.Continuation
     let signals: AsyncStream<Void>
-    private var latest: AudioMeterSample?
+    private var pending: [AudioMeterSample] = []
     private var receivedCount = 0
     private var renderedCount = 0
     private var coalescedCount = 0
     private var maximumDeliveryLagMilliseconds = 0.0
 
     init() {
-        let pair = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        let pair = AsyncStream<Void>.makeStream(
+            bufferingPolicy: .bufferingNewest(AudioLevelSink.maximumPending))
         signals = pair.stream
         continuation = pair.continuation
     }
@@ -36,16 +50,18 @@ final class AudioLevelSink: @unchecked Sendable {
                                       emittedAt: ContinuousClock.now)
         lock.withLock {
             receivedCount += 1
-            if latest != nil { coalescedCount += 1 }
-            latest = sample
+            pending.append(sample)
+            while pending.count > Self.maximumPending {
+                pending.removeFirst()
+                coalescedCount += 1
+            }
         }
         _ = continuation.yield(())
     }
 
-    fileprivate func takeLatest() -> AudioMeterSample? {
+    fileprivate func takeNext() -> AudioMeterSample? {
         lock.withLock {
-            defer { latest = nil }
-            return latest
+            pending.isEmpty ? nil : pending.removeFirst()
         }
     }
 
@@ -97,7 +113,7 @@ final class AudioMeterState: ObservableObject {
                     catch { return }
                 }
                 guard !Task.isCancelled, generation == self.generation,
-                      let sample = sink.takeLatest() else { continue }
+                      let sample = sink.takeNext() else { continue }
                 let renderedAt = clock.now
                 let lag = sample.emittedAt.duration(to: renderedAt)
                 sink.noteRendered(lagMilliseconds: Self.milliseconds(lag))

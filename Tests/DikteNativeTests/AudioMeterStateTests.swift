@@ -34,6 +34,34 @@ final class AudioMeterStateTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(stopped.renderedCount, 1)
     }
 
+    func testABurstOfLevelsIsSpreadAcrossFramesRatherThanCollapsedIntoOne() async throws {
+        // Voice Processing I/O hands over one 100 ms buffer at a time, so its
+        // driver emits a level per display frame in a burst. Each has to reach
+        // the waveform on its own frame; collapsing them to one is what made the
+        // display advance ten bars a second instead of thirty.
+        let meter = AudioMeterState()
+        let sink = meter.start()
+        for _ in 0..<3 { sink.yield(0.8) }
+        try await Task.sleep(for: .milliseconds(140))
+
+        XCTAssertEqual(meter.statistics().renderedCount, 3)
+        XCTAssertEqual(meter.statistics().coalescedCount, 0)
+        meter.stop()
+    }
+
+    func testABurstLongerThanTheQueueStillCannotBacklog() async throws {
+        let meter = AudioMeterState()
+        let sink = meter.start()
+        for _ in 0..<50 { sink.yield(0.8) }
+        try await Task.sleep(for: .milliseconds(140))
+
+        let statistics = meter.statistics()
+        XCTAssertEqual(statistics.receivedCount, 50)
+        XCTAssertLessThanOrEqual(statistics.renderedCount, AudioLevelSink.maximumPending)
+        XCTAssertGreaterThan(statistics.coalescedCount, 0)
+        meter.stop()
+    }
+
     func testWarmModelPolicyIsFortyFiveSeconds() {
         XCTAssertEqual(ModelLifecyclePolicy.warmModelSeconds, 45)
     }

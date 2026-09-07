@@ -316,8 +316,16 @@ final class AppModel: ObservableObject {
                 AudioPreprocessor.prepare(recording)
             }.value
             try Task.checkCancellation()
-            let allSamples = AudioPreprocessor.resample(recording.samples, from: recording.sampleRate,
-                                                        to: AudioPreprocessor.targetRate)
+            // Everything downstream — the VAD, the chunking and Whisper itself —
+            // works on this one conditioned copy, so the high-pass has to be
+            // applied here and not only inside `prepare`, whose output is used
+            // just for the VAD-failure fallback.
+            let allSamples = AudioPreprocessor.highPassed(
+                AudioPreprocessor.resample(recording.samples, from: recording.sampleRate,
+                                           to: AudioPreprocessor.targetRate),
+                sampleRate: AudioPreprocessor.targetRate)
+            diagnostics.noiseFloor = prepared.noiseFloor
+            diagnostics.speechThreshold = prepared.threshold
 
             performanceTracker?.begin("Konuşma algılama")
             setStage(.segmentingSpeech)
@@ -447,7 +455,18 @@ final class AppModel: ObservableObject {
                 throw DikteError.noSpeech
             }
             if hasUnresolvedChunk {
-                await finishIncomplete(recording, partialText: raw, diagnostics: diagnostics,
+                await finishIncomplete(recording, partialText: raw,
+                                       reason: "Bir konuşma bölümü çözülemedi; bulunan metin panoda.",
+                                       transcript: selected, diagnostics: diagnostics,
+                                       vadRegions: vadRegions, chunkDiagnostics: chunkDiagnostics, mode: mode)
+                return
+            }
+            if TranscriptionPolicy.isConfidenceTooLow(meanTokenProbability: selected.meanTokenProbability,
+                                                      lowConfidenceTokenRatio: selected.lowConfidenceTokenRatio,
+                                                      tokenCount: selected.tokenCount) {
+                await finishIncomplete(recording, partialText: raw,
+                                       reason: "Tanıma güveni düşük; metin panoda ama gözden geçir.",
+                                       transcript: selected, diagnostics: diagnostics,
                                        vadRegions: vadRegions, chunkDiagnostics: chunkDiagnostics, mode: mode)
                 return
             }
@@ -525,7 +544,7 @@ final class AppModel: ObservableObject {
         guard let audioLevelSink else {
             throw DikteError.message("Ses seviyesi hattı hazırlanamadı.")
         }
-        try await recorder.start(restarting: restarting) { [weak self] in
+        try await recorder.start(restarting: restarting, noiseSuppression: settings.noiseSuppression) { [weak self] in
             self?.receiveFirstAudioSample()
         } onLevel: { [audioLevelSink] level in
             audioLevelSink.yield(level)
@@ -612,6 +631,8 @@ final class AppModel: ObservableObject {
     }
 
     private func finishIncomplete(_ capture: AudioCapture, partialText: String,
+                                  reason: String,
+                                  transcript: WhisperTranscript?,
                                   diagnostics: AudioDiagnostics,
                                   vadRegions: [SpeechRegion],
                                   chunkDiagnostics: [ChunkTranscriptionDiagnostic],
@@ -635,10 +656,12 @@ final class AppModel: ObservableObject {
                                  captureMode: mode,
                                  rawTranscript: partialText, finalText: cleaned,
                                  deterministicText: cleaned, localCorrectedText: nil,
+                                 primaryConfidence: transcript?.meanTokenProbability,
+                                 lowConfidenceTokenRatio: transcript?.lowConfidenceTokenRatio,
                                  audioDiagnostics: diagnostics, chunkDiagnostics: chunkDiagnostics,
                                  performanceDiagnostics: performance,
                                  diagnosticCaptureID: diagnosticID))
-        pasteService.notify(notificationTitle(for: mode), "Bir konuşma bölümü çözülemedi; bulunan metin panoda.")
+        pasteService.notify(notificationTitle(for: mode), reason)
         returnToIdle()
     }
 
