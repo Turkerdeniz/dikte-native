@@ -5,73 +5,58 @@ tanımlanmış-ama-uygulanmamış planlar — kaybolmadan takip etmek için var.
 değişikliği burada anlatılmaz; ilgili kaynak dosyalar ve (varsa) `git stash`
 girdisi referans verilir.
 
-## Bloklanmış
+## Karar bekleyen
 
-### 1. Gürültü bastırma (Voice Processing I/O) — 6 Eylül 2026
+### 1. Gürültü bastırma ölçüldü: gürültüyü azaltıyor, tanımayı iyileştirmiyor — 7 Eylül 2026
 
-**Durum:** Bloklandı, tekrar bakılacak. Kurulu uygulamaya hiçbir şey yansımadı;
-tüm deneme `git stash` içinde duruyor, ana daldan (main) hiç commit edilmedi.
+Ölçüm yapıldı (aynı gürültülü ortam, 19 saniye arayla aynı cümle, History verisinden):
 
-**Hedef:** macOS'un Voice Processing I/O'sunu (`AVAudioEngine` + `AVAudioInputNode.
-setVoiceProcessingEnabled(true)`) kullanarak isteğe bağlı, varsayılan kapalı bir
-gürültü bastırma seçeneği eklemek — mevcut `AVCaptureSession` tabanlı yakalama
-yoluna dokunmadan, ayrı bir sürücü olarak.
+| | Açık (17:24:50) | Kapalı (17:25:09) |
+|---|---|---|
+| Gürültü tabanı | 0.00281 | 0.00622 |
+| Konuşma eşiği | 0.00844 (uyarlandı) | 0.008 (sabit) |
+| Turbo güveni | 0.759 | 0.796 |
+| Zayıf token oranı | 0.140 | 0.162 |
 
-**Neden zor:** Uygulamanın temel sözü "sistem giriş aygıtını değiştirmeden yalnız
-MacBook'un yerleşik mikrofonunu kullanmak." `AVAudioEngine`'in `inputNode`'u
-varsayılan olarak sistemin *o anki varsayılan giriş aygıtını* kullanır (AirPods
-bağlıysa onu kullanabilir) — bu yüzden cihazı built-in mikrofona **sabitlemek**
-zorunlu, isteğe bağlı bir iyileştirme değil.
+**Sinyal düzeyinde çalışıyor:** VPIO gürültü tabanını %55 düşürüyor.
 
-**Bulgular (standalone Swift script'lerle, gerçek donanımda tekrarlanabilir
-şekilde doğrulandı — kod tabanına hiç girmedi):**
+**Ama metin daha kötü çıkıyor.** "güncel uygulamayı kullanmıyorum" açıkken "güncel
+uygulama yapıyorum", kapalıyken doğru; "kapatış yapmanı" açıkken "tabataç yapmanı",
+kapalıyken doğru. Güven de kapalıyken biraz yüksek.
 
-1. VPIO gerçek ses veriyor, çökmüyor — `setVoiceProcessingEnabled(true)` çalışıyor.
-2. Bu Mac'in mikrofon dizisi VPIO altında **9 kanal, 48 kHz ham veri** olarak
-   görünüyor (beklenen tek kanal beamformed çıktı değil). Muhtemelen çoklu-mikrofon
-   dizisinin ham elemanları.
-3. `installTap`'a doğrudan farklı bir kanal sayısıyla format istemek,
-   `AVAudioEngine`'in kendi downmix'ini yapmasını sağlıyor — **izole çalıştığında**
-   gerçek, geçerli tek kanallı ses veriyor (doğrulandı: `maxPeak` makul, format
-   doğru).
-4. `installTap`'a doğrudan hedef 16 kHz'i istemek (resample + downmix birlikte)
-   engine başlatmayı **başarısız kılıyor** (`kAUInitialize`, durum -10875). VPIO
-   kendi donanım hızında (48 kHz) sabit; resample ayrı bir adım (`AVAudioConverter`)
-   olarak yapılmalı.
-5. **Asıl blokaj:** cihazı built-in mikrofona sabitlemek (`AudioUnitSetProperty`,
-   `kAudioOutputUnitProperty_CurrentDevice`) **ile** mono-downmix `installTap`
-   birlikte istendiğinde, engine yine `kAUInitialize` (-10875) hatasıyla
-   başlamıyor. Bu **iki kez, izole bir script'te tekrar üretildi** — rastgele
-   bir arıza değil, gerçek bir uyumsuzluk. Pinleme tek başına çalışıyor
-   (`kAudioOutputUnitProperty_CurrentDevice` başarıyla dönüyor); downmix tek
-   başına çalışıyor; ikisi birlikte istendiğinde engine başlamıyor.
+**Yorum:** Voice Processing I/O telefon görüşmesi için ayarlanmış; gürültüyü
+bastırırken Whisper'ın güvendiği spektral yapıyı da eziyor. Daha az gürültü daha
+iyi tanıma anlamına gelmiyor.
 
-**Denenmiş ama kod tabanına girmemiş çözüm:** `git stash list` içinde
-`"blocked: VPIO noise suppression - device pin + downmix tap fails kAUInitialize
-(-10875)"` mesajıyla duruyor. İçerik: `AppSettings.swift`'e `noiseSuppression`
-ayarı, `AudioRecorder.swift`'e `VoiceProcessingCaptureDriver` + `audioDeviceID
-(forUniqueID:)` yardımcı fonksiyonu, `SettingsView.swift`'e toggle,
-`AppModel.swift`'te `settings.noiseSuppression`'ın `recorder.start`'a
-geçirilmesi, ve gerçek donanıma karşı çalışan (varsayılan atlanan, `DIKTE_TEST_
-NOISE_SUPPRESSION=1` ile açılan) `Tests/DikteNativeTests/
-NoiseSuppressionCaptureTests.swift`. Bu stash `git stash apply stash@{0}` (veya
-güncel indeksi kontrol edip doğru numarayla) ile geri getirilebilir — ama şu an
-**çalışmıyor**, doğrudan üzerine inşa edilmemeli.
+**Sınır:** Bu tek bir çift. Güven farkı küçük ve tek başına anlamlı değil; ikna
+edici olan metin farkı, o da n=1.
 
-**Sonraki adım için olası yönler (denenmedi):**
-- `AVAudioEngine.inputNode` yerine ham `AudioComponentInstance`/AUGraph ile VPIO'yu
-  manuel kurmak — daha fazla kontrol, ama gerçek bir yeniden yazım.
-- Sıralamayı değiştirmek: cihazı `setVoiceProcessingEnabled(true)`'dan **önce**
-  pinlemeyi denemek (şu ana kadar hep VPIO açıldıktan sonra pinlendi).
-  `kAudioUnitProperty_StreamFormat`'ı `installTap` üzerinden değil doğrudan
-  `AudioUnitSetProperty` ile ayarlamayı denemek.
-- Apple'ın VPIO + özel cihaz seçimi için resmi örnek kod/dokümantasyonuna
-  bakmak (bu konuda güncel bir referans bulunamadı, muhtemelen az belgelenmiş
-  bir macOS köşesi).
+**Karar:** Seçenek deneysel ve varsayılan kapalı olarak duruyor. Birkaç farklı
+ortamda daha veri biriktikten sonra ya kaldırılacak ya da tutulacak. Tek çiftle
+çalışan kodu silmek acele olur.
+
+### 2. Tanı alanları her kayıtta yazılmıyor olabilir — 7 Eylül 2026
+
+Aynı build ile alınan 17:12–17:21 arası kayıtlarda `noiseFloor` ve
+`speechThreshold` 0 görünüyor, 17:24'ten itibaren dolu. Sebebi incelenmedi.
+Karar etkilemiyor ama tanı verisine güvenmeden önce bakılmalı.
 
 ---
 
 ## Uygulandı
+
+### Gürültülü ortam iyileştirmeleri — 7 Eylül 2026
+
+`git stash` içindeki VPIO denemesi iki düzeltmeyle canlandırıldı (cihaz
+`setVoiceProcessingEnabled`'dan **önce** pinlenir; tap formatı node'un kendi
+örnekleme hızını korur, yalnız kanalı 1'e indirir). `stash@{0}` içeriği artık
+çalışma ağacında olduğu için gereksiz; silinmesi Türker'in onayına bırakıldı.
+Ayrıca
+`AVAudioIONode.audioUnit` public olduğu için selector hack'i kaldırıldı, VPIO
+açılamazsa normal yakalamaya dönen bir fallback eklendi. Bunun yanında
+uyarlanabilir konuşma eşiği, 80 Hz high-pass ve güven tabanlı kabul kapısı
+uygulandı. Ayrıntı için CHANGELOG'un 7 Eylül 2026 girdisine bak.
+
 
 ### 2. CorrectionStore / "Düzelt ve öğret" — 6 Eylül 2026'da düzeltildi
 

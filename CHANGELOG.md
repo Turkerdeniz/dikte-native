@@ -2,6 +2,17 @@
 
 Bu dosya kullanıcıya ve bakım yapan geliştiriciye dönük önemli değişiklikleri özetler. Ayrıntılı teknik davranış için `docs/` belgelerine bak.
 
+## Çalışma ağacı — Gürültülü ortam iyileştirmeleri — 7 Eylül 2026
+
+- **Gürültü bastırma (deneysel, varsayılan kapalı):** Ayarlar'a macOS Voice Processing I/O'yu kullanan bir seçenek eklendi. Açıkken yakalama, yalnız MacBook'un yerleşik mikrofonuna sabitlenmiş bir `AVAudioEngine` yolundan geçer ve Apple'ın gürültü bastırma, yankı giderme ve otomatik kazanç ayarı uygulanır. Sistem giriş aygıtı hiçbir zaman değiştirilmez.
+- Voice Processing I/O bu makinede açılamazsa kayıt kaybolmaz: normal yakalama yoluna sessizce dönülür ve sebebi o kaydın ses tanısına yazılır.
+- **Uyarlanabilir konuşma eşiği:** Konuşma/sessizlik ayrımı artık sabit 0.008 mutlak seviyeyle değil, o kaydın ölçülen gürültü tabanına göre yapılıyor. Gürültü tabanı zaten 0.008'in üstünde olan bir odada eskiden her çerçeve "konuşma" sayılıyor, sessizlik kırpması işlevsizleşiyor ve VAD bölge üretemediğinde konuşma süresi tüm kayıt olarak raporlanıyordu. Eşik hiçbir zaman eski sabit değerin altına inmez ve kaydın yüksek ucunun belirli bir oranını aşamaz, dolayısıyla konuşmanın kendisini kırpamaz.
+- **High-pass filtre:** Fan, klima ve masa gürültüsünün bulunduğu 80 Hz altı bant, VAD ve Whisper'a gitmeden önce süzülüyor. Whisper'ın mel spektrogramına katkısı olmayan ama her çerçevenin RMS'ini şişiren enerji ortadan kalkıyor.
+- **Güven sinyali artık karar veriyor:** Whisper'ın token olasılıkları (ortalama güven ve zayıf token oranı) şimdiye kadar yalnız History'de gösteriliyordu. Ortalama düşük **ve** tokenlerin çoğu zayıfsa — gürültü üzerine uydurulmuş metnin tipik imzası — sonuç artık "eksik" olarak işaretleniyor: metin yine panoya kopyalanıyor ve History'ye yazılıyor ama otomatik yapıştırılmıyor, bildirimde gözden geçirilmesi isteniyor. Metin hiçbir zaman atılmaz.
+- History'deki ses tanısına ölçülen gürültü tabanı ve kullanılan konuşma eşiği eklendi; gürültü bastırma açık/kapalı karşılaştırması artık sayıyla yapılabilir.
+- **Dalga formu düzeltmesi:** Gürültü bastırma açıkken dalga formu saniyede otuz yerine on kutu ilerliyordu. `AVAudioEngine` istenen tampon boyutunu yok sayıp sabit 100 ms'lik bloklar verdiği için her geri çağrımdan tek seviye üretiliyordu; artık blok kare boyutunda pencerelere bölünüyor ve seviye kanalı bunları tek slotta ezmek yerine küçük sınırlı bir kuyrukta tutuyor. Yalnız görüntüyü etkiliyordu, kaydedilen ses hiçbir zaman eksilmedi.
+- Ölçüm sonucu: gürültü bastırma gürültü tabanını yarıdan fazla düşürüyor ama tanıma doğruluğunu iyileştirmiyor, hatta bir miktar bozuyor. Bu yüzden deneysel ve varsayılan kapalı kalıyor; ayrıntı `TODO.md`'de.
+
 ## Çalışma ağacı — Kısa ve Net kısayolu artık ayarlanabilir — 6 Eylül 2026
 
 - Kısa ve Net kısayolu (`⌥E`) artık Ham kısayolu gibi Ayarlar'dan bağımsız olarak değiştirilebilir; sabit değil.
