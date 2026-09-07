@@ -11,7 +11,7 @@ Bu dosya kullanıcıya ve bakım yapan geliştiriciye dönük önemli değişikl
 - **Güven sinyali artık karar veriyor:** Whisper'ın token olasılıkları (ortalama güven ve zayıf token oranı) şimdiye kadar yalnız History'de gösteriliyordu. Ortalama düşük **ve** tokenlerin çoğu zayıfsa — gürültü üzerine uydurulmuş metnin tipik imzası — sonuç artık "eksik" olarak işaretleniyor: metin yine panoya kopyalanıyor ve History'ye yazılıyor ama otomatik yapıştırılmıyor, bildirimde gözden geçirilmesi isteniyor. Metin hiçbir zaman atılmaz.
 - History'deki ses tanısına ölçülen gürültü tabanı ve kullanılan konuşma eşiği eklendi; gürültü bastırma açık/kapalı karşılaştırması artık sayıyla yapılabilir.
 - **Dalga formu düzeltmesi:** Gürültü bastırma açıkken dalga formu saniyede otuz yerine on kutu ilerliyordu. `AVAudioEngine` istenen tampon boyutunu yok sayıp sabit 100 ms'lik bloklar verdiği için her geri çağrımdan tek seviye üretiliyordu; artık blok kare boyutunda pencerelere bölünüyor ve seviye kanalı bunları tek slotta ezmek yerine küçük sınırlı bir kuyrukta tutuyor. Yalnız görüntüyü etkiliyordu, kaydedilen ses hiçbir zaman eksilmedi.
-- Ölçüm sonucu: gürültü bastırma gürültü tabanını yarıdan fazla düşürüyor ama tanıma doğruluğunu iyileştirmiyor, hatta bir miktar bozuyor. Bu yüzden deneysel ve varsayılan kapalı kalıyor; ayrıntı `TODO.md`'de.
+- Ölçüm sonucu: gürültü bastırma tanıma doğruluğunu iyileştirmiyor, hatta bir miktar bozuyor; kendi otomatik kazancı seviyeyi belirgin yükseltiyor. Gürültüyü gerçekten azaltıp azaltmadığı ölçülemedi. Bu yüzden deneysel ve varsayılan kapalı kalıyor; ayrıntı `TODO.md`'de.
 
 ## Çalışma ağacı — Kısa ve Net kısayolu artık ayarlanabilir — 6 Eylül 2026
 

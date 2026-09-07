@@ -7,39 +7,47 @@ girdisi referans verilir.
 
 ## Karar bekleyen
 
-### 1. Gürültü bastırma ölçüldü: gürültüyü azaltıyor, tanımayı iyileştirmiyor — 7 Eylül 2026
+### 1. Gürültü bastırma: kanıt zayıf, kapalı kalıyor — 7 Eylül 2026
 
-Ölçüm yapıldı (aynı gürültülü ortam, 19 saniye arayla aynı cümle, History verisinden):
+**Önceki kayıt düzeltildi.** Bu bölümde daha önce "gürültü tabanını %55 düşürüyor"
+yazıyordu; o sayılar hatalıydı. A/B çiftinin her iki kaydında da `noiseFloor` ve
+`speechThreshold` alanları **0**, yani hiç kaydedilmemiş (bkz. madde 2). Gürültü
+tabanı hakkında elimizde veri yok.
 
-| | Açık (17:24:50) | Kapalı (17:25:09) |
+Aynı gürültülü ortam, 19 saniye arayla aynı cümle. Gerçekten ölçülen:
+
+| | Açık | Kapalı |
 |---|---|---|
-| Gürültü tabanı | 0.00281 | 0.00622 |
-| Konuşma eşiği | 0.00844 (uyarlandı) | 0.008 (sabit) |
 | Turbo güveni | 0.759 | 0.796 |
 | Zayıf token oranı | 0.140 | 0.162 |
+| peakLevel | 0.867 | 0.131 |
+| rmsLevel | 0.0632 | 0.0183 |
 
-**Sinyal düzeyinde çalışıyor:** VPIO gürültü tabanını %55 düşürüyor.
+**Metin farkı (asıl kanıt):** "güncel uygulamayı kullanmıyorum" açıkken "güncel
+uygulama yapıyorum", kapalıyken doğru. "kapatış yapmanı" açıkken "tabataç
+yapmanı", kapalıyken doğru.
 
-**Ama metin daha kötü çıkıyor.** "güncel uygulamayı kullanmıyorum" açıkken "güncel
-uygulama yapıyorum", kapalıyken doğru; "kapatış yapmanı" açıkken "tabataç yapmanı",
-kapalıyken doğru. Güven de kapalıyken biraz yüksek.
+**Gözlem:** VPIO seviyeyi ~3.5 kat yükseltmiş (rms 0.018 → 0.063). Bu kendi AGC'si.
+Agresif kazanç artı telefon görüşmesi için ayarlanmış gürültü bastırmanın Whisper'ın
+güvendiği yapıyı bozması makul bir açıklama, ama doğrulanmadı.
 
-**Yorum:** Voice Processing I/O telefon görüşmesi için ayarlanmış; gürültüyü
-bastırırken Whisper'ın güvendiği spektral yapıyı da eziyor. Daha az gürültü daha
-iyi tanıma anlamına gelmiyor.
+**Sınır:** Tek çift. Güven farkı küçük, tek başına anlamlı değil. İkna edici olan
+metin farkı, o da n=1. "Gürültüyü azaltıyor" iddiasını destekleyecek hiçbir
+ölçümümüz yok.
 
-**Sınır:** Bu tek bir çift. Güven farkı küçük ve tek başına anlamlı değil; ikna
-edici olan metin farkı, o da n=1.
-
-**Karar:** Seçenek deneysel ve varsayılan kapalı olarak duruyor. Birkaç farklı
-ortamda daha veri biriktikten sonra ya kaldırılacak ya da tutulacak. Tek çiftle
-çalışan kodu silmek acele olur.
+**Karar:** Deneysel ve varsayılan kapalı kalıyor. Madde 2 çözülmeden yeni ölçüm
+yapmak anlamsız — önce tanı alanlarının neden yazılmadığı bulunmalı.
 
 ### 2. Tanı alanları her kayıtta yazılmıyor olabilir — 7 Eylül 2026
 
-Aynı build ile alınan 17:12–17:21 arası kayıtlarda `noiseFloor` ve
-`speechThreshold` 0 görünüyor, 17:24'ten itibaren dolu. Sebebi incelenmedi.
-Karar etkilemiyor ama tanı verisine güvenmeden önce bakılmalı.
+17:25:54'te kurulan build'den **önceki** tüm kayıtlarda `noiseFloor` ve
+`speechThreshold` 0; o andan sonraki kayıtlarda dolu. Sınır tam olarak kurulum anı,
+yani alanları yazan kod o ana kadar çalışan binary'de yoktu — oysa aynı kayıtlar
+"Voice Processing I/O" formatı gösteriyor, yani VPIO'lu bir build'di. Çelişki
+çözülmedi.
+
+**Önemi:** Madde 1'deki gürültü tabanı karşılaştırması bu yüzden yapılamadı ve
+bir ara yanlış raporlandı. Tanı verisine güvenilmeden önce bu çözülmeli.
 
 ---
 
