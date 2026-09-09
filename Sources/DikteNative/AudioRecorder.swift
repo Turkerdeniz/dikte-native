@@ -702,11 +702,40 @@ final class AudioRecorder {
         startedAt = nil
     }
 
+    /// The built-in microphone reports a stable unique ID, so that is matched
+    /// first. The display-name fallback that used to be the only rule is
+    /// dangerous on its own: it accepts any device whose localized name contains
+    /// "macbook", which includes the speakers — "MacBook Pro Hoparlörü",
+    /// "MacBook Pro Speakers" — and the discovery session has been observed
+    /// listing an output device after Voice Processing I/O has run. Picking one
+    /// produces a capture session that starts happily and delivers no audio at
+    /// all. The fallback therefore also requires the device to really have input
+    /// channels, which is a property of the hardware rather than of its name in
+    /// the user's language.
+    static let builtInMicrophoneUniqueID = "BuiltInMicrophoneDevice"
+
     private static func builtInMicrophone() -> AVCaptureDevice? {
-        AVCaptureDevice.DiscoverySession(deviceTypes: [.microphone], mediaType: .audio,
-                                         position: .unspecified).devices.first {
+        let devices = AVCaptureDevice.DiscoverySession(deviceTypes: [.microphone], mediaType: .audio,
+                                                       position: .unspecified).devices
+        if let exact = devices.first(where: { $0.uniqueID == builtInMicrophoneUniqueID }) { return exact }
+        return devices.first {
             let name = $0.localizedName.folding(options: [.diacriticInsensitive], locale: .current).lowercased()
-            return name.contains("macbook") && !name.contains("iphone")
+            guard name.contains("macbook"), !name.contains("iphone") else { return false }
+            return deviceHasAudioInput(uniqueID: $0.uniqueID)
         }
+    }
+
+    static func deviceHasAudioInput(uniqueID: String) -> Bool {
+        guard let deviceID = audioDeviceID(forUniqueID: uniqueID) else { return false }
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyStreamConfiguration,
+                                                 mScope: kAudioDevicePropertyScopeInput,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(deviceID, &address, 0, nil, &size) == noErr, size > 0 else { return false }
+        let raw = UnsafeMutableRawPointer.allocate(byteCount: Int(size), alignment: 16)
+        defer { raw.deallocate() }
+        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, raw) == noErr else { return false }
+        let list = UnsafeMutableAudioBufferListPointer(raw.assumingMemoryBound(to: AudioBufferList.self))
+        return list.reduce(0) { $0 + Int($1.mNumberChannels) } > 0
     }
 }
