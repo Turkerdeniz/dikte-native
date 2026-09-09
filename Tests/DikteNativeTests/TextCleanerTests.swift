@@ -34,14 +34,22 @@ final class TextCleanerTests: XCTestCase {
         ))
     }
 
-    func testCorrectionLearnerRequiresAnExplicitChangedSpan() {
+    /// This asserted a single span covering both edits, which is the behaviour
+    /// that filled the real correction store with sentence-length pairs that
+    /// could never match again. Two independent fixes must now yield two
+    /// independently reusable corrections, and the words between them — "ve" —
+    /// must stay out of both.
+    func testCorrectionLearnerSeparatesIndependentFixes() {
         let candidates = CorrectionLearner.candidates(
             original: "Bu bir deneme syskaydı ve Kodeks'e gidecek.",
             corrected: "Bu bir deneme ses kaydı ve Codex'e gidecek."
         )
-        XCTAssertEqual(candidates.count, 1)
-        XCTAssertTrue(candidates[0].heard.contains("syskaydı"))
-        XCTAssertTrue(candidates[0].corrected.contains("ses"))
+        XCTAssertEqual(candidates.count, 2)
+        XCTAssertEqual(candidates[0].heard, "syskaydı")
+        XCTAssertEqual(candidates[0].corrected, "ses kaydı")
+        XCTAssertEqual(candidates[1].heard, "Kodeks'e")
+        XCTAssertEqual(candidates[1].corrected, "Codex'e")
+        XCTAssertFalse(candidates.contains { $0.heard.contains(" ve ") || $0.corrected.contains(" ve ") })
     }
 
     func testApplyCorrectionsReplacesAConfirmedMatchAndReportsWhichFired() {

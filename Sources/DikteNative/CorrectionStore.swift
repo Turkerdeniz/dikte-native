@@ -26,33 +26,82 @@ struct CorrectionCandidate: Identifiable, Equatable, Sendable {
 }
 
 enum CorrectionLearner {
+    /// A taught pair only ever helps if the same wording turns up again, and a
+    /// long one never does: the recogniser does not repeat a whole misheard
+    /// sentence verbatim. Pairs longer than this are dropped rather than stored
+    /// as entries that can never match.
+    static let maximumCandidateWords = 3
+    /// The alignment below is quadratic, so a very long transcript is left alone
+    /// rather than stalling the settings sheet.
+    static let maximumComparableWords = 600
+
+    /// Extracts one pair per changed region.
+    ///
+    /// This used to trim the common prefix and the common suffix and return the
+    /// single span between them, which meant that correcting two separate words
+    /// in one sentence also swallowed every correct word in between — the stored
+    /// pair became a sentence-length fragment that could never match again.
+    /// Aligning the two word sequences properly yields the individual edits, so
+    /// "X kodu ... buyıt" against "Xcode'u ... build" now teaches "X kodu" →
+    /// "Xcode'u" and "buyıt" → "build" as separate, reusable corrections.
     static func candidates(original: String, corrected: String) -> [CorrectionCandidate] {
         let lhs = words(original)
         let rhs = words(corrected)
-        guard lhs != rhs, !lhs.isEmpty, !rhs.isEmpty else { return [] }
-        var prefix = 0
-        while prefix < min(lhs.count, rhs.count), equivalent(lhs[prefix], rhs[prefix]) { prefix += 1 }
-        var suffix = 0
-        while suffix < min(lhs.count - prefix, rhs.count - prefix),
-              equivalent(lhs[lhs.count - suffix - 1], rhs[rhs.count - suffix - 1]) { suffix += 1 }
-        let leftEnd = max(prefix, lhs.count - suffix)
-        let rightEnd = max(prefix, rhs.count - suffix)
-        let heard = lhs[prefix..<leftEnd].joined(separator: " ")
-        let replacement = rhs[prefix..<rightEnd].joined(separator: " ")
-        guard !heard.isEmpty, !replacement.isEmpty,
-              heard.split(separator: " ").count <= 8,
-              replacement.split(separator: " ").count <= 8 else { return [] }
-        return [CorrectionCandidate(heard: heard, corrected: replacement)]
+        guard lhs != rhs, !lhs.isEmpty, !rhs.isEmpty,
+              lhs.count <= maximumComparableWords, rhs.count <= maximumComparableWords else { return [] }
+        return differingRuns(lhs, rhs).compactMap { run in
+            let heard = lhs[run.left].joined(separator: " ")
+            let replacement = rhs[run.right].joined(separator: " ")
+            // A pure insertion or deletion has nothing safe to find or to put in
+            // its place, so it is not offered as a correction.
+            guard !heard.isEmpty, !replacement.isEmpty,
+                  run.left.count <= maximumCandidateWords,
+                  run.right.count <= maximumCandidateWords else { return nil }
+            return CorrectionCandidate(heard: heard, corrected: replacement)
+        }
+    }
+
+    private static func differingRuns(_ lhs: [String], _ rhs: [String]) -> [(left: Range<Int>, right: Range<Int>)] {
+        let left = lhs.map(normalized)
+        let right = rhs.map(normalized)
+        var table = [[Int]](repeating: [Int](repeating: 0, count: right.count + 1), count: left.count + 1)
+        for i in stride(from: left.count - 1, through: 0, by: -1) {
+            for j in stride(from: right.count - 1, through: 0, by: -1) {
+                table[i][j] = left[i] == right[j]
+                    ? table[i + 1][j + 1] + 1
+                    : max(table[i + 1][j], table[i][j + 1])
+            }
+        }
+        var runs: [(left: Range<Int>, right: Range<Int>)] = []
+        var i = 0, j = 0, startI = 0, startJ = 0
+        var inRun = false
+        while i < left.count || j < right.count {
+            if i < left.count, j < right.count, left[i] == right[j] {
+                if inRun {
+                    runs.append((left: startI..<i, right: startJ..<j))
+                    inRun = false
+                }
+                i += 1
+                j += 1
+            } else {
+                if !inRun {
+                    startI = i
+                    startJ = j
+                    inRun = true
+                }
+                if j < right.count, i == left.count || table[i][j + 1] >= table[i + 1][j] { j += 1 } else { i += 1 }
+            }
+        }
+        if inRun { runs.append((left: startI..<left.count, right: startJ..<right.count)) }
+        return runs
     }
 
     private static func words(_ text: String) -> [String] {
         text.split(whereSeparator: { $0.isWhitespace }).map(String.init)
     }
 
-    private static func equivalent(_ lhs: String, _ rhs: String) -> Bool {
-        lhs.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-            .trimmingCharacters(in: .punctuationCharacters) ==
-        rhs.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+    private static func normalized(_ value: String) -> String {
+        value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
             .trimmingCharacters(in: .punctuationCharacters)
     }
 }
