@@ -227,6 +227,17 @@ struct AudioDiagnostics: Codable, Equatable, Sendable {
         transcriptionChunkCount = try box.decodeIfPresent(Int.self, forKey: .transcriptionChunkCount) ?? 0
         vadSpeechDuration = try box.decodeIfPresent(TimeInterval.self, forKey: .vadSpeechDuration) ?? 0
         vadFallbackReason = try box.decodeIfPresent(String.self, forKey: .vadFallbackReason)
+        // Every stored property needs a line here. This initialiser exists so a
+        // history file written before a field existed still decodes, but that
+        // makes it silently lossy when a new field is added and forgotten: the
+        // value is written correctly, then dropped on the next launch's load and
+        // persisted back as a default. `AudioDiagnosticsCodingTests` guards the
+        // round trip precisely because that already happened once and destroyed
+        // the noise measurements it was added to collect.
+        voiceProcessingFallbackReason = try box.decodeIfPresent(String.self,
+                                                                forKey: .voiceProcessingFallbackReason)
+        noiseFloor = try box.decodeIfPresent(Float.self, forKey: .noiseFloor) ?? 0
+        speechThreshold = try box.decodeIfPresent(Float.self, forKey: .speechThreshold) ?? 0
     }
 
     var summary: String {

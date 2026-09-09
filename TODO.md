@@ -35,23 +35,32 @@ güvendiği yapıyı bozması makul bir açıklama, ama doğrulanmadı.
 metin farkı, o da n=1. "Gürültüyü azaltıyor" iddiasını destekleyecek hiçbir
 ölçümümüz yok.
 
-**Karar:** Deneysel ve varsayılan kapalı kalıyor. Madde 2 çözülmeden yeni ölçüm
-yapmak anlamsız — önce tanı alanlarının neden yazılmadığı bulunmalı.
-
-### 2. Tanı alanları her kayıtta yazılmıyor olabilir — 7 Eylül 2026
-
-17:25:54'te kurulan build'den **önceki** tüm kayıtlarda `noiseFloor` ve
-`speechThreshold` 0; o andan sonraki kayıtlarda dolu. Sınır tam olarak kurulum anı,
-yani alanları yazan kod o ana kadar çalışan binary'de yoktu — oysa aynı kayıtlar
-"Voice Processing I/O" formatı gösteriyor, yani VPIO'lu bir build'di. Çelişki
-çözülmedi.
-
-**Önemi:** Madde 1'deki gürültü tabanı karşılaştırması bu yüzden yapılamadı ve
-bir ara yanlış raporlandı. Tanı verisine güvenilmeden önce bu çözülmeli.
+**Karar:** Deneysel ve varsayılan kapalı kalıyor. Ölçümü engelleyen tanı bugı
+9 Eylül 2026'da çözüldü (aşağıya bak), yani gürültü tabanı karşılaştırması artık
+yapılabilir. Yeni bir gürültülü ortam fırsatında tekrarlanmalı: aynı cümle, toggle
+açık ve kapalı, History → Ses tanısı'ndaki "Gürültü tabanı" satırı.
 
 ---
 
 ## Uygulandı
+
+### Tanı alanları sessizce siliniyordu — 9 Eylül 2026'da düzeltildi
+
+`AudioDiagnostics` eski geçmiş dosyalarıyla uyumluluk için elle yazılmış bir
+`init(from:)` taşıyor ve o `vadFallbackReason`'da bitiyordu. 7 Eylül'de eklenen
+`noiseFloor`, `speechThreshold` ve `voiceProcessingFallbackReason` decode
+edilmiyordu.
+
+Mekanizma: değer diske doğru yazılıyor, uygulama bir sonraki açılışta `load()`
+sırasında onu düşürüyor, ardından ilk `persist()` dosyanın tamamını sıfırlarla
+geri yazıyordu. Yani veri sessizce yok ediliyordu — 7 Eylül'deki gürültü
+ölçümünün kaybolmasının ve bir ara yanlış raporlanmasının sebebi buydu.
+
+Düzeltme üç eksik alanı decode ediyor. `AudioDiagnosticsCodingTests` hem bu üç
+alanı adıyla hem de tüm alanları `Equatable` üzerinden kontrol ediyor; ikincisi
+alan-agnostik, yani ileride eklenip decoder'da unutulan her alan testi düşürür.
+`HistoryEntry`'nin elle yazılmış decoder'ı tarandı, onun 24 alanı da tam.
+
 
 ### Gürültülü ortam iyileştirmeleri — 7 Eylül 2026
 
