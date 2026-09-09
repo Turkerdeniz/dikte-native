@@ -233,6 +233,11 @@ private struct LocalModelSettingsView: View {
                             Toggle("", isOn: Binding(get: { entry.isEnabled }, set: { corrections.setEnabled(id: entry.id, enabled: $0) }))
                                 .labelsHidden()
                             Text("\(entry.heard) → \(entry.corrected)")
+                            if CorrectionRisk.replacesARealWord(entry.heard, language: model.settings.language) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.orange)
+                                    .help("“\(entry.heard)” gerçek bir kelime. Bu düzeltme açıkken gerçekten “\(entry.heard)” dediğin yerlerde de “\(entry.corrected)” yazılır.")
+                            }
                             Spacer()
                             Text(entry.useCount > 0 ? "\(entry.useCount) kez devreye girdi" : "Henüz devreye girmedi")
                                 .font(.caption).foregroundStyle(.secondary)
@@ -531,10 +536,17 @@ private struct CorrectionEditSheet: View {
             } else {
                 Text("Yalnız onayladığın eşleşmeler sözlüğe eklenir.").font(.caption).foregroundStyle(.secondary)
                 ForEach(candidates) { candidate in
-                    Toggle("\(candidate.heard) → \(candidate.corrected)",
-                           isOn: Binding(get: { selected.contains(candidate.id) }, set: {
-                               if $0 { selected.insert(candidate.id) } else { selected.remove(candidate.id) }
-                           }))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Toggle("\(candidate.heard) → \(candidate.corrected)",
+                               isOn: Binding(get: { selected.contains(candidate.id) }, set: {
+                                   if $0 { selected.insert(candidate.id) } else { selected.remove(candidate.id) }
+                               }))
+                        if candidate.replacesARealWord {
+                            Label("“\(candidate.heard)” gerçek bir kelime. Bunu açarsan gerçekten “\(candidate.heard)” dediğin her yerde de “\(candidate.corrected)” yazılır.",
+                                  systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption).foregroundStyle(.orange)
+                        }
+                    }
                 }
             }
             HStack {
@@ -543,7 +555,16 @@ private struct CorrectionEditSheet: View {
                 if candidates.isEmpty {
                     Button("Eşleşmeleri incele") {
                         candidates = CorrectionLearner.candidates(original: entry.finalText, corrected: correctedText)
-                        selected = Set(candidates.map(\.id))
+                            .map { candidate in
+                                var flagged = candidate
+                                flagged.replacesARealWord = CorrectionRisk.replacesARealWord(
+                                    candidate.heard, language: model.settings.language)
+                                return flagged
+                            }
+                        // A correction that rewrites an ordinary word is left
+                        // unticked: it is worth offering, but not worth turning on
+                        // without the user looking at it.
+                        selected = Set(candidates.filter { !$0.replacesARealWord }.map(\.id))
                         if candidates.isEmpty { save() }
                     }.disabled(correctedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || correctedText == entry.finalText)
                 } else {

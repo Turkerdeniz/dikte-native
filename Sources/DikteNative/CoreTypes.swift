@@ -77,6 +77,16 @@ enum RecognitionLanguage: String, CaseIterable, Codable, Identifiable {
         case .english: "English"
         }
     }
+    /// The system dictionary used to decide whether a misheard word is a real
+    /// word of this language. Automatic recognition falls back to Turkish,
+    /// which is the app's default and the only language whose dictionary is
+    /// worth consulting when the language is not pinned.
+    var spellCheckerLanguage: String? {
+        switch self {
+        case .automatic, .turkish: "tr"
+        case .english: "en"
+        }
+    }
     var whisperCode: String? {
         switch self {
         case .automatic: nil

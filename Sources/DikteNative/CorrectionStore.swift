@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 struct CorrectionEntry: Identifiable, Codable, Equatable, Sendable {
@@ -23,6 +24,36 @@ struct CorrectionCandidate: Identifiable, Equatable, Sendable {
     let id = UUID()
     let heard: String
     let corrected: String
+    /// True when `heard` is an ordinary word of the recognition language rather
+    /// than a garbled non-word. See `CorrectionRisk`.
+    var replacesARealWord = false
+}
+
+/// A taught correction is a context-free find-and-replace, so it cannot tell the
+/// two senses of a word apart. Teaching "boyut" → "build" because the recogniser
+/// misheard the English word is reasonable and useful, but it also rewrites the
+/// ordinary Turkish "boyut" wherever it is genuinely meant, and nothing in the
+/// pipeline can distinguish them.
+///
+/// What is checkable is whether the misheard side is a real word at all. The
+/// corrections that are always safe replace non-words the language never
+/// produces — "syskaydı", "buyıt", "vadan". The ones that can misfire replace
+/// something the user might really say. The system dictionary answers that
+/// offline, so those corrections are surfaced and require a deliberate choice
+/// instead of being switched on silently.
+enum CorrectionRisk {
+    static func replacesARealWord(_ heard: String, language: RecognitionLanguage) -> Bool {
+        guard let code = language.spellCheckerLanguage else { return false }
+        let trimmed = heard.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        // A multi-word phrase is specific enough that an accidental match is not
+        // the concern; only a single ordinary word is.
+        guard !trimmed.contains(" ") else { return false }
+        let range = NSSpellChecker.shared.checkSpelling(
+            of: trimmed, startingAt: 0, language: code, wrap: false,
+            inSpellDocumentWithTag: 0, wordCount: nil)
+        return range.location == NSNotFound
+    }
 }
 
 enum CorrectionLearner {
