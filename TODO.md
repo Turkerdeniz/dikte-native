@@ -5,6 +5,46 @@ tanımlanmış-ama-uygulanmamış planlar — kaybolmadan takip etmek için var.
 değişikliği burada anlatılmaz; ilgili kaynak dosyalar ve (varsa) `git stash`
 girdisi referans verilir.
 
+## Bekleyen
+
+### Birkaç gün gerçek kullanım, sonra sabitleri ayarla — 11 Eylül 2026
+
+11 Eylül'de dört şey birden değişti. Beşincisini eklemeden önce hangisinin ne
+kadar fark ettiğini görmek gerekiyor; yoksa sonucu okumak imkânsızlaşır.
+
+Kullanımdan sonra gerçek veriyle gözden geçirilecek sabitler:
+
+| Sabit | Değer | Neden şüpheli |
+|---|---|---|
+| `RoutePolicy.minimumTokensForRepair` | 8 | Geçmişe karakter tahminiyle uygulandı, token sayısı saklanmıyordu. Gerçekten bozuk birkaç çok kısa kaydı da eliyor ("Bence direkt planlayı", güven 0.575). |
+| `RoutePolicy.repairConfidenceThreshold` | 0.75 | Kısa kayıtların ~%14'ünü onarıma yolluyor. Çok fazla Codex beklemesi olursa düşürülür. |
+| `TranscriptWord.uncertainThreshold` | 0.60 | Gerçek bir kayıtta bozuk kelime 0.37, sınırdaki doğru kelime 0.61 çıktı — ayrım dar. |
+
+`transcriptWords` artık History'de saklandığı için bu üçü de tahminle değil
+ölçümle ayarlanabilir.
+
+**İzlenecek belirti:** kısa kayıtlarda beklenmedik Codex beklemesi; doğru
+kelimelerin turuncu işaretlenmesi; riskli düzeltmenin gerekirken devreye
+girmemesi.
+
+### Adım 3 — model kuantizasyonunu ölç (yapılmadı)
+
+Şu an `ggml-large-v3-turbo-q5_0`. `q8_0` daha az kayıplı; bellek ve hız
+maliyetine karşı doğruluk kazancı **ölçülebilir** artık, çünkü her kayıtta
+`primaryConfidence` ve kelime bazlı güven saklanıyor.
+
+Yöntem: aynı `Diagnostics/` WAV'ını iki modelle çalıştır, güven dağılımını ve
+metni karşılaştır. Tek kayıt yeterli değil; birkaç farklı ortamdan kayıt gerekir.
+
+### Bilinen sınır — düzeltme güveni kelime başına
+
+`TextCleaner.applyCorrections` riskli düzeltmeyi kelime başına eşleştiriyor,
+geçiş başına değil. Aynı kayıtta hem emin hem şüpheli bir "boyut" varsa ikisi de
+değişir. Bugünkü davranışın aynısı, daha kötüsü değil; geçiş bazlı çözüm için
+kelime listesini metin konumlarıyla hizalamak gerekir.
+
+---
+
 ## Uygulandı
 
 ### Gürültü bastırma kaldırıldı — 11 Eylül 2026
