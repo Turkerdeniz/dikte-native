@@ -2,6 +2,14 @@
 
 Bu dosya kullanıcıya ve bakım yapan geliştiriciye dönük önemli değişiklikleri özetler. Ayrıntılı teknik davranış için `docs/` belgelerine bak.
 
+## Çalışma ağacı — Düzeltmeler artık bağlama duyarlı — 11 Eylül 2026
+
+- "boyut → build" gibi, duyulan tarafı gerçek bir kelime olan düzeltmeler artık körlemesine uygulanmıyor. Whisper'ın o kelimeden emin olup olmadığına bakılıyor: gerçekten "boyut" dediğinde tanıyıcı emin olur ve kelimeye dokunulmaz; yanlış duyduğunda emin olmaz ve düzeltme devreye girer.
+- Dilin hiç üretmediği uydurma kelimeleri değiştiren düzeltmeler ("syskaydı", "buyıt") koşulsuz çalışmaya devam ediyor; zarar verecek ikinci bir anlamları yok.
+- Kelime bazlı güven verisi olmayan bir yolda eski davranış korunuyor, yani hiçbir durum eskisinden kötü olmuyor.
+- Bilinen sınır: güven kelime başına eşleşiyor, geçiş başına değil. Aynı kayıtta hem emin hem şüpheli bir "boyut" varsa ikisi de değişir — bu da bugünkü davranışın aynısı, daha kötüsü değil.
+- Ayarlar'daki uyarı bilgi notuna dönüştü ve bu düzeltmeler yeniden varsayılan olarak işaretli geliyor.
+
 ## Çalışma ağacı — Kelime bazlı güven — 11 Eylül 2026
 
 - History'de "Whisper'ın duyduğu" metni artık kelime kelime işaretleniyor: tanıyıcının emin olmadığı kelimeler turuncu ve altı çizili görünüyor, altında kaç tanesi olduğu yazıyor. Düzeltirken bütün metni gözle taramak yerine doğrudan şüpheli kelimelere bakılabilir.

@@ -231,9 +231,9 @@ private struct LocalModelSettingsView: View {
                                 .labelsHidden()
                             Text("\(entry.heard) → \(entry.corrected)")
                             if CorrectionRisk.replacesARealWord(entry.heard, language: model.settings.language) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundStyle(.orange)
-                                    .help("“\(entry.heard)” gerçek bir kelime. Bu düzeltme açıkken gerçekten “\(entry.heard)” dediğin yerlerde de “\(entry.corrected)” yazılır.")
+                                Image(systemName: "info.circle")
+                                    .foregroundStyle(.secondary)
+                                    .help("“\(entry.heard)” gerçek bir kelime. Bu düzeltme yalnız Whisper o kelimeden emin olmadığında uygulanır; gerçekten “\(entry.heard)” dediğin yerlere dokunulmaz.")
                             }
                             Spacer()
                             Text(entry.useCount > 0 ? "\(entry.useCount) kez devreye girdi" : "Henüz devreye girmedi")
@@ -545,9 +545,9 @@ private struct CorrectionEditSheet: View {
                                    if $0 { selected.insert(candidate.id) } else { selected.remove(candidate.id) }
                                }))
                         if candidate.replacesARealWord {
-                            Label("“\(candidate.heard)” gerçek bir kelime. Bunu açarsan gerçekten “\(candidate.heard)” dediğin her yerde de “\(candidate.corrected)” yazılır.",
-                                  systemImage: "exclamationmark.triangle.fill")
-                                .font(.caption).foregroundStyle(.orange)
+                            Label("“\(candidate.heard)” gerçek bir kelime, o yüzden bu düzeltme yalnız Whisper o kelimeden emin olmadığında uygulanır. Gerçekten “\(candidate.heard)” dediğinde dokunulmaz.",
+                                  systemImage: "info.circle")
+                                .font(.caption).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -564,10 +564,7 @@ private struct CorrectionEditSheet: View {
                                     candidate.heard, language: model.settings.language)
                                 return flagged
                             }
-                        // A correction that rewrites an ordinary word is left
-                        // unticked: it is worth offering, but not worth turning on
-                        // without the user looking at it.
-                        selected = Set(candidates.filter { !$0.replacesARealWord }.map(\.id))
+                        selected = Set(candidates.map(\.id))
                         if candidates.isEmpty { save() }
                     }.disabled(correctedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || correctedText == entry.finalText)
                 } else {

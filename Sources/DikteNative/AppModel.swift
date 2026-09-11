@@ -474,7 +474,9 @@ final class AppModel: ObservableObject {
             performanceTracker?.begin("Metin temizleme")
             setStage(.cleaning)
             let cleanedRaw = TextCleaner.clean(raw)
-            let (cleaned, appliedCorrectionIDs) = TextCleaner.applyCorrections(cleanedRaw, entries: corrections.entries)
+            let (cleaned, appliedCorrectionIDs) = TextCleaner.applyCorrections(
+                cleanedRaw, entries: corrections.entries,
+                words: selected.words, language: settings.language)
             corrections.recordApplied(appliedCorrectionIDs)
             let localResult = cleaned
             var final = localResult; var response: String?; var codexError: String?
@@ -641,7 +643,9 @@ final class AppModel: ObservableObject {
                                   chunkDiagnostics: [ChunkTranscriptionDiagnostic],
                                   mode: CaptureMode) async {
         let cleanedRaw = TextCleaner.clean(partialText)
-        let (cleaned, appliedCorrectionIDs) = TextCleaner.applyCorrections(cleanedRaw, entries: corrections.entries)
+        let (cleaned, appliedCorrectionIDs) = TextCleaner.applyCorrections(
+            cleanedRaw, entries: corrections.entries,
+            words: transcript?.words ?? [], language: settings.language)
         corrections.recordApplied(appliedCorrectionIDs)
         if !cleaned.isEmpty {
             lastResult = cleaned

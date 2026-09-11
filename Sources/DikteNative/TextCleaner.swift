@@ -28,17 +28,43 @@ enum TextCleaner {
     /// of the cleaned transcript. This is separate from, and in addition to, the
     /// soft vocabulary hint the same corrections give Whisper via `initial_prompt`
     /// (see `CorrectionStore.promptTerms`): that hint only nudges recognition
-    /// probabilistically, so a taught correction with no deterministic follow-up
-    /// step had no guaranteed effect on the final text. Matching is whole-word,
-    /// case-insensitive, and does not fold diacritics — a correction should not
-    /// fire on a merely similar-looking word.
-    static func applyCorrections(_ text: String, entries: [CorrectionEntry]) -> (text: String, appliedIDs: [UUID]) {
+    /// probabilistically. Matching is whole-word, case-insensitive, and does not
+    /// fold diacritics — a correction should not fire on a merely similar-looking
+    /// word.
+    ///
+    /// A correction whose misheard side is an ordinary word of the language —
+    /// "boyut" → "build" — carries a cost the others do not: it rewrites the word
+    /// wherever it is genuinely meant. `words` resolves that. The recogniser
+    /// scores what it decodes, and the two cases look different to it: a word the
+    /// user really said comes back confident, a word it misheard comes back
+    /// doubtful. Such a correction is therefore applied only when the recogniser
+    /// was unsure of that word in this transcript.
+    ///
+    /// Corrections that replace a non-word the language never produces —
+    /// "syskaydı", "buyıt" — are unconditional, because there is no second sense
+    /// for them to damage.
+    ///
+    /// Passing no `words` keeps the old unconditional behaviour, so a path
+    /// without per-word certainty is never made worse than it was.
+    ///
+    /// The limitation, stated plainly: certainty is matched per word and not per
+    /// occurrence. A transcript containing both a confident and a doubtful
+    /// "boyut" replaces both — the same as today, never worse.
+    static func applyCorrections(_ text: String, entries: [CorrectionEntry],
+                                 words: [TranscriptWord] = [],
+                                 language: RecognitionLanguage = .turkish) -> (text: String, appliedIDs: [UUID]) {
         var result = text
         var appliedIDs: [UUID] = []
+        let uncertain = uncertainWordForms(words)
         for entry in entries where entry.isEnabled {
             let heard = entry.heard.trimmingCharacters(in: .whitespacesAndNewlines)
             let corrected = entry.corrected.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !heard.isEmpty, !corrected.isEmpty else { continue }
+            if !words.isEmpty,
+               CorrectionRisk.replacesARealWord(heard, language: language),
+               !uncertain.contains(normalizedWordForm(heard)) {
+                continue
+            }
             let pattern = "\\b" + NSRegularExpression.escapedPattern(for: heard) + "\\b"
             guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { continue }
             let fullRange = NSRange(result.startIndex..., in: result)
@@ -48,6 +74,15 @@ enum TextCleaner {
             appliedIDs.append(entry.id)
         }
         return (result, appliedIDs)
+    }
+
+    static func uncertainWordForms(_ words: [TranscriptWord]) -> Set<String> {
+        Set(words.filter(\.isUncertain).map { normalizedWordForm($0.text) })
+    }
+
+    private static func normalizedWordForm(_ value: String) -> String {
+        value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            .trimmingCharacters(in: .punctuationCharacters)
     }
 }
 
