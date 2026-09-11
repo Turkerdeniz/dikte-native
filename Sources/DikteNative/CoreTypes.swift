@@ -172,6 +172,25 @@ struct PerformanceDiagnostics: Codable, Equatable, Sendable {
     let modelUnloadMilliseconds: Double?
 }
 
+/// One word of a transcript with the recogniser's own certainty about it.
+///
+/// Whisper decodes sub-word tokens and reports a probability for each. Until now
+/// only their mean survived, which says a recording went badly without saying
+/// *where*. A word is reported here as no more certain than its least certain
+/// piece: "graph'ın" decoded as a confident "graph" and a doubtful "'ın" is a
+/// word worth looking at, and averaging would hide that.
+struct TranscriptWord: Codable, Equatable, Sendable {
+    let text: String
+    let probability: Float
+
+    /// Below this a word is worth the user's eye. Deliberately higher than
+    /// `ChunkAcceptancePolicy.weakTokenThreshold`, which decides whether to
+    /// re-run a chunk: drawing attention costs nothing, re-decoding costs time.
+    static let uncertainThreshold: Float = 0.60
+
+    var isUncertain: Bool { probability < Self.uncertainThreshold }
+}
+
 struct AudioDiagnostics: Codable, Equatable, Sendable {
     var deviceID: String = ""
     var deviceName: String = ""
@@ -272,6 +291,10 @@ struct HistoryEntry: Identifiable, Codable, Equatable, Sendable {
     let primaryConfidence: Float?
     let accurateConfidence: Float?
     let lowConfidenceTokenRatio: Float?
+    /// Per-word certainty for `rawTranscript`, which is the only text these line
+    /// up with — the cleanup, the taught corrections and Codex all rewrite it
+    /// afterwards.
+    let transcriptWords: [TranscriptWord]?
     let wordsPerSecond: Double?
     let charactersPerSecond: Double?
     let accurateModelSelected: Bool?
@@ -291,7 +314,8 @@ struct HistoryEntry: Identifiable, Codable, Equatable, Sendable {
                   rawTranscript: rawTranscript, finalText: finalText, deterministicText: nil,
                   localCorrectedText: nil, accurateTranscript: nil, accuratePassReason: nil,
                   primaryConfidence: nil, accurateConfidence: nil,
-                  lowConfidenceTokenRatio: nil, wordsPerSecond: nil, charactersPerSecond: nil,
+                  lowConfidenceTokenRatio: nil, transcriptWords: nil,
+                  wordsPerSecond: nil, charactersPerSecond: nil,
                   accurateModelSelected: nil, modelSelectionReason: nil,
                   codexResponse: codexResponse, codexError: codexError,
                   audioDiagnostics: nil, chunkDiagnostics: nil, performanceDiagnostics: nil,
@@ -303,7 +327,8 @@ struct HistoryEntry: Identifiable, Codable, Equatable, Sendable {
          rawTranscript: String, finalText: String, deterministicText: String?, localCorrectedText: String?,
          accurateTranscript: String? = nil, accuratePassReason: String? = nil,
          primaryConfidence: Float? = nil, accurateConfidence: Float? = nil,
-         lowConfidenceTokenRatio: Float? = nil, wordsPerSecond: Double? = nil,
+         lowConfidenceTokenRatio: Float? = nil, transcriptWords: [TranscriptWord]? = nil,
+         wordsPerSecond: Double? = nil,
          charactersPerSecond: Double? = nil, accurateModelSelected: Bool? = nil,
          modelSelectionReason: String? = nil,
          codexResponse: String? = nil, codexError: String? = nil, audioDiagnostics: AudioDiagnostics? = nil,
@@ -317,6 +342,7 @@ struct HistoryEntry: Identifiable, Codable, Equatable, Sendable {
         self.accurateTranscript = accurateTranscript; self.accuratePassReason = accuratePassReason
         self.primaryConfidence = primaryConfidence; self.accurateConfidence = accurateConfidence
         self.lowConfidenceTokenRatio = lowConfidenceTokenRatio
+        self.transcriptWords = transcriptWords
         self.wordsPerSecond = wordsPerSecond; self.charactersPerSecond = charactersPerSecond
         self.accurateModelSelected = accurateModelSelected; self.modelSelectionReason = modelSelectionReason
         self.codexResponse = codexResponse; self.codexError = codexError
@@ -328,7 +354,7 @@ struct HistoryEntry: Identifiable, Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, timestamp, duration, mode, captureMode, rawTranscript, finalText, deterministicText, localCorrectedText
         case accurateTranscript, accuratePassReason, primaryConfidence, accurateConfidence
-        case lowConfidenceTokenRatio, wordsPerSecond, charactersPerSecond
+        case lowConfidenceTokenRatio, transcriptWords, wordsPerSecond, charactersPerSecond
         case accurateModelSelected, modelSelectionReason
         case codexResponse, codexError, audioDiagnostics, chunkDiagnostics, performanceDiagnostics
         case diagnosticCaptureID
@@ -350,6 +376,7 @@ struct HistoryEntry: Identifiable, Codable, Equatable, Sendable {
         primaryConfidence = try box.decodeIfPresent(Float.self, forKey: .primaryConfidence)
         accurateConfidence = try box.decodeIfPresent(Float.self, forKey: .accurateConfidence)
         lowConfidenceTokenRatio = try box.decodeIfPresent(Float.self, forKey: .lowConfidenceTokenRatio)
+        transcriptWords = try box.decodeIfPresent([TranscriptWord].self, forKey: .transcriptWords)
         wordsPerSecond = try box.decodeIfPresent(Double.self, forKey: .wordsPerSecond)
         charactersPerSecond = try box.decodeIfPresent(Double.self, forKey: .charactersPerSecond)
         accurateModelSelected = try box.decodeIfPresent(Bool.self, forKey: .accurateModelSelected)

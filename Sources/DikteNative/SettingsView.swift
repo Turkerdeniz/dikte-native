@@ -348,7 +348,17 @@ private struct HistoryView: View {
                             }
                         }
                         if entry.mode != .recordingError {
-                            Divider(); Text("Whisper’ın duyduğu").font(.headline); Text(entry.rawTranscript).textSelection(.enabled)
+                            Divider(); Text("Whisper’ın duyduğu").font(.headline)
+                            if let words = entry.transcriptWords, !words.isEmpty {
+                                UncertainWordsView(words: words)
+                                let unsure = words.filter(\.isUncertain).count
+                                Text(unsure > 0
+                                     ? "Turuncu işaretli \(unsure) kelimeden Whisper emin değil — düzeltirken önce onlara bak."
+                                     : "Whisper bütün kelimelerden makul ölçüde emin.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            } else {
+                                Text(entry.rawTranscript).textSelection(.enabled)
+                            }
                             if let accurate = entry.accurateTranscript {
                                 Divider(); Text("Güçlü modelin duyduğu").font(.headline); Text(accurate).textSelection(.enabled)
                                 if let reason = entry.accuratePassReason {
@@ -587,6 +597,28 @@ private struct HotKeyCaptureSheet: View {
             KeyCaptureView(candidate: $candidate)
             HStack { Button("Vazgeç") { selection = nil }; Button("Kaydet") { if let candidate, model.applyHotKey(candidate, for: mode) { selection = nil } }.disabled(candidate == nil).buttonStyle(.borderedProminent) }
         }.padding(28).frame(width: 400, height: 250)
+    }
+}
+
+/// Renders the recogniser's own text with the words it was unsure about marked.
+/// The marking is on this text and not on the final result on purpose: the
+/// cleanup, the taught corrections and Codex all rewrite the transcript
+/// afterwards, so only these words still line up with what was measured.
+private struct UncertainWordsView: View {
+    let words: [TranscriptWord]
+
+    var body: some View {
+        Text(words.map(attributed).reduce(AttributedString(), +))
+            .textSelection(.enabled)
+    }
+
+    private func attributed(_ word: TranscriptWord) -> AttributedString {
+        var piece = AttributedString(word.text + " ")
+        if word.isUncertain {
+            piece.foregroundColor = .orange
+            piece.underlineStyle = .single
+        }
+        return piece
     }
 }
 

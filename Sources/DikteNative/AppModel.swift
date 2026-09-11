@@ -523,6 +523,7 @@ final class AppModel: ObservableObject {
                                      rawTranscript: raw, finalText: final, deterministicText: cleaned,
                                      localCorrectedText: nil, primaryConfidence: selected.meanTokenProbability,
                                      lowConfidenceTokenRatio: selected.lowConfidenceTokenRatio,
+                                     transcriptWords: selected.words.isEmpty ? nil : selected.words,
                                      wordsPerSecond: wordsPerSecond, charactersPerSecond: charactersPerSecond,
                                      codexResponse: response, codexError: codexError,
                                      audioDiagnostics: diagnostics, chunkDiagnostics: chunkDiagnostics,
@@ -660,6 +661,7 @@ final class AppModel: ObservableObject {
                                  deterministicText: cleaned, localCorrectedText: nil,
                                  primaryConfidence: transcript?.meanTokenProbability,
                                  lowConfidenceTokenRatio: transcript?.lowConfidenceTokenRatio,
+                                 transcriptWords: (transcript?.words).flatMap { $0.isEmpty ? nil : $0 },
                                  audioDiagnostics: diagnostics, chunkDiagnostics: chunkDiagnostics,
                                  performanceDiagnostics: performance,
                                  diagnosticCaptureID: diagnosticID))
@@ -706,7 +708,12 @@ final class AppModel: ObservableObject {
             meanTokenProbability: tokenCount > 0 ? weightedConfidence / Float(tokenCount) : 0,
             lowConfidenceTokenRatio: tokenCount > 0 ? weakTokens / Float(tokenCount) : 0,
             tokenCount: tokenCount,
-            detectedLanguage: parts.compactMap(\.detectedLanguage).first
+            detectedLanguage: parts.compactMap(\.detectedLanguage).first,
+            // Concatenated rather than de-overlapped: `TranscriptAssembler.join`
+            // drops repeated words where chunks overlap, so a word list built
+            // from the parts can hold a few duplicates at the seams. They are
+            // shown as extra words, never as wrong certainty.
+            words: parts.flatMap(\.words)
         )
     }
 

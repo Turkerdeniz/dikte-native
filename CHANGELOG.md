@@ -2,6 +2,13 @@
 
 Bu dosya kullanıcıya ve bakım yapan geliştiriciye dönük önemli değişiklikleri özetler. Ayrıntılı teknik davranış için `docs/` belgelerine bak.
 
+## Çalışma ağacı — Kelime bazlı güven — 11 Eylül 2026
+
+- History'de "Whisper'ın duyduğu" metni artık kelime kelime işaretleniyor: tanıyıcının emin olmadığı kelimeler turuncu ve altı çizili görünüyor, altında kaç tanesi olduğu yazıyor. Düzeltirken bütün metni gözle taramak yerine doğrudan şüpheli kelimelere bakılabilir.
+- Bir kelimenin güveni, parçalarının **en düşüğü** alınarak hesaplanır. "graph'ın" gibi bir kelimede güvenli bir gövde şüpheli bir eki gizlemesin diye ortalama kullanılmadı.
+- İşaretleme nihai metinde değil, tanıyıcının ham çıktısında yapılır; temizlik, öğretilen düzeltmeler ve Codex metni sonradan değiştirdiği için yalnız o metin ölçülen değerlerle hizalı.
+- Gerçek model ve gerçek kayıtla doğrulandı: bozuk çıkan tek kelime 0.37 ile açık ara en düşük skoru aldı.
+
 ## Çalışma ağacı — Düşük güvenli kısa kayıtlar da onarılıyor — 11 Eylül 2026
 
 - Codex onarımına yönlendirme artık yalnız süreye bakmıyor. Kayıt eşikten kısa olsa bile Whisper'ın güveni düşükse metin onarıma gönderiliyor. Geçmiş veride Codex'e hiç gitmeyen kayıtların medyanı 6.8 saniyeydi ve ham metinleri neredeyse hiç düzeltilmiyordu (%0.1 değişim), oysa Codex'ten geçenlerde ortalama %47 düzeltme oluyordu.

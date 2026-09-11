@@ -7,14 +7,46 @@ struct WhisperTranscript: Equatable, Sendable {
     let lowConfidenceTokenRatio: Float
     let tokenCount: Int
     let detectedLanguage: String?
+    let words: [TranscriptWord]
 
     init(text: String, meanTokenProbability: Float, lowConfidenceTokenRatio: Float = 0,
-         tokenCount: Int, detectedLanguage: String? = nil) {
+         tokenCount: Int, detectedLanguage: String? = nil, words: [TranscriptWord] = []) {
         self.text = text
         self.meanTokenProbability = meanTokenProbability
         self.lowConfidenceTokenRatio = lowConfidenceTokenRatio
         self.tokenCount = tokenCount
         self.detectedLanguage = detectedLanguage
+        self.words = words
+    }
+}
+
+/// Groups Whisper's sub-word tokens back into words. A token that opens with a
+/// space starts a new word, which is how the tokenizer marks the boundary;
+/// everything else continues the current one. The word takes the *lowest*
+/// probability among its pieces, because a word is only as trustworthy as its
+/// least trustworthy part.
+struct TranscriptWordBuilder {
+    private var words: [TranscriptWord] = []
+    private var text = ""
+    private var lowest: Float = 1
+
+    mutating func append(piece: String, probability: Float) {
+        guard !piece.isEmpty else { return }
+        if piece.hasPrefix(" ") { flush() }
+        text += piece
+        if probability.isFinite, probability > 0 { lowest = min(lowest, probability) }
+    }
+
+    mutating func flush() {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { words.append(TranscriptWord(text: trimmed, probability: lowest)) }
+        text = ""
+        lowest = 1
+    }
+
+    mutating func finish() -> [TranscriptWord] {
+        flush()
+        return words
     }
 }
 
@@ -64,7 +96,8 @@ actor WhisperEngine {
         return WhisperTranscript(text: result.text, meanTokenProbability: result.meanTokenProbability,
                                  lowConfidenceTokenRatio: result.tokenCount > 0
                                     ? Float(result.lowConfidenceTokenCount) / Float(result.tokenCount) : 0,
-                                 tokenCount: result.tokenCount, detectedLanguage: result.detectedLanguage)
+                                 tokenCount: result.tokenCount, detectedLanguage: result.detectedLanguage,
+                                 words: result.words)
     }
 
     func transcribe(chunks: [[Float]], language: RecognitionLanguage, promptTerms: [String] = []) throws -> WhisperTranscript {
@@ -74,12 +107,14 @@ actor WhisperEngine {
         var weightedProbability: Float = 0
         var tokenCount = 0
         var lowConfidenceTokenCount = 0
+        var words: [TranscriptWord] = []
         for chunk in chunks where !chunk.isEmpty {
             try Task.checkCancellation()
             let result = try transcribeSingle(samples: chunk, languageCode: detectedLanguage,
                                               detectLanguage: language == .automatic && detectedLanguage == nil,
                                               promptTerms: promptTerms)
             parts.append(result.text)
+            words.append(contentsOf: result.words)
             weightedProbability += result.meanTokenProbability * Float(result.tokenCount)
             tokenCount += result.tokenCount
             lowConfidenceTokenCount += result.lowConfidenceTokenCount
@@ -88,12 +123,13 @@ actor WhisperEngine {
         return WhisperTranscript(text: TranscriptAssembler.join(parts),
                                  meanTokenProbability: tokenCount > 0 ? weightedProbability / Float(tokenCount) : 0,
                                  lowConfidenceTokenRatio: tokenCount > 0 ? Float(lowConfidenceTokenCount) / Float(tokenCount) : 0,
-                                 tokenCount: tokenCount, detectedLanguage: detectedLanguage)
+                                 tokenCount: tokenCount, detectedLanguage: detectedLanguage,
+                                 words: words)
     }
 
     private func transcribeSingle(samples: [Float], languageCode: String?, detectLanguage: Bool,
                                   promptTerms: [String], noSpeechThreshold: Float = 0.55,
-                                  threadCount: Int32 = WhisperEngine.threadCount) throws -> (text: String, detectedLanguage: String?, meanTokenProbability: Float, tokenCount: Int, lowConfidenceTokenCount: Int) {
+                                  threadCount: Int32 = WhisperEngine.threadCount) throws -> (text: String, detectedLanguage: String?, meanTokenProbability: Float, tokenCount: Int, lowConfidenceTokenCount: Int, words: [TranscriptWord]) {
         guard let context else { throw DikteError.modelMissing }
         var params = whisper_full_default_params(WHISPER_SAMPLING_BEAM_SEARCH)
         params.n_threads = min(threadCount, Int32(max(2, ProcessInfo.processInfo.activeProcessorCount - 2)))
@@ -140,12 +176,16 @@ actor WhisperEngine {
         var probabilityCount = 0
         var lowConfidenceTokenCount = 0
         let endOfTextToken = whisper_token_eot(context)
+        var wordBuilder = TranscriptWordBuilder()
         for index in 0..<count {
             if let pointer = whisper_full_get_segment_text(context, index) { text += String(cString: pointer) }
             let count = whisper_full_n_tokens(context, index)
             for tokenIndex in 0..<count {
                 guard whisper_full_get_token_id(context, index, tokenIndex) < endOfTextToken else { continue }
                 let probability = whisper_full_get_token_p(context, index, tokenIndex)
+                if let pointer = whisper_full_get_token_text(context, index, tokenIndex) {
+                    wordBuilder.append(piece: String(cString: pointer), probability: probability)
+                }
                 if probability.isFinite, probability > 0 {
                     probabilitySum += probability
                     probabilityCount += 1
@@ -157,7 +197,7 @@ actor WhisperEngine {
         let detected = languageID >= 0 ? whisper_lang_str(languageID).map { String(cString: $0) } : nil
         return (text.trimmingCharacters(in: .whitespacesAndNewlines), detected,
                 probabilityCount > 0 ? probabilitySum / Float(probabilityCount) : 0,
-                probabilityCount, lowConfidenceTokenCount)
+                probabilityCount, lowConfidenceTokenCount, wordBuilder.finish())
     }
 
     func unload() {
