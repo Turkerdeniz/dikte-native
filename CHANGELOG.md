@@ -2,6 +2,12 @@
 
 Bu dosya kullanıcıya ve bakım yapan geliştiriciye dönük önemli değişiklikleri özetler. Ayrıntılı teknik davranış için `docs/` belgelerine bak.
 
+## Çalışma ağacı — Düşük güvenli kısa kayıtlar da onarılıyor — 11 Eylül 2026
+
+- Codex onarımına yönlendirme artık yalnız süreye bakmıyor. Kayıt eşikten kısa olsa bile Whisper'ın güveni düşükse metin onarıma gönderiliyor. Geçmiş veride Codex'e hiç gitmeyen kayıtların medyanı 6.8 saniyeydi ve ham metinleri neredeyse hiç düzeltilmiyordu (%0.1 değişim), oysa Codex'ten geçenlerde ortalama %47 düzeltme oluyordu.
+- Çok kısa ifadeler ("Teşekkürler.") bunun dışında: birkaç token üzerinden hesaplanan güven zaten gürültülü ve onarım yalnızca bekleme eklerdi. Yönlendirme için en az sekiz token şartı var.
+- Süre eşiği ve Kısa ve Net akışı değişmedi.
+
 ## Çalışma ağacı — Gürültü bastırma kaldırıldı — 11 Eylül 2026
 
 - Deneysel gürültü bastırma seçeneği kaldırıldı. Ölçüm, gürültü tabanını yaklaşık 4.5 kat düşürdüğünü ama tanıma doğruluğunu belirgin biçimde bozduğunu gösterdi (aynı ortamda güven 0.759 → 0.668). Kayıtlı ayar açılışta temizlenir; Ayarlar'daki toggle ve ikinci yakalama yolu tamamen gitti.

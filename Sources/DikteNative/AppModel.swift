@@ -479,7 +479,9 @@ final class AppModel: ObservableObject {
             let localResult = cleaned
             var final = localResult; var response: String?; var codexError: String?
             let route = RoutePolicy.destination(for: mode, duration: recording.duration,
-                                                threshold: settings.codexThreshold)
+                                                threshold: settings.codexThreshold,
+                                                confidence: selected.meanTokenProbability,
+                                                tokenCount: selected.tokenCount)
             let useCodex = route == .codex
             if useCodex {
                 performanceTracker?.begin("Codex")
