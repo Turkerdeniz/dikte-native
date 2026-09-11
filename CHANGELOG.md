@@ -2,6 +2,11 @@
 
 Bu dosya kullanıcıya ve bakım yapan geliştiriciye dönük önemli değişiklikleri özetler. Ayrıntılı teknik davranış için `docs/` belgelerine bak.
 
+## Çalışma ağacı — Gürültü bastırma kaldırıldı — 11 Eylül 2026
+
+- Deneysel gürültü bastırma seçeneği kaldırıldı. Ölçüm, gürültü tabanını yaklaşık 4.5 kat düşürdüğünü ama tanıma doğruluğunu belirgin biçimde bozduğunu gösterdi (aynı ortamda güven 0.759 → 0.668). Kayıtlı ayar açılışta temizlenir; Ayarlar'daki toggle ve ikinci yakalama yolu tamamen gitti.
+- High-pass filtre, uyarlanabilir konuşma eşiği ve History'deki gürültü tabanı/eşik satırları korundu; bunlar seçenekten bağımsız çalışıyor.
+
 ## Çalışma ağacı — Gürültülü ortam iyileştirmeleri — 7 Eylül 2026
 
 - **Gürültü bastırma (deneysel, varsayılan kapalı):** Ayarlar'a macOS Voice Processing I/O'yu kullanan bir seçenek eklendi. Açıkken yakalama, yalnız MacBook'un yerleşik mikrofonuna sabitlenmiş bir `AVAudioEngine` yolundan geçer ve Apple'ın gürültü bastırma, yankı giderme ve otomatik kazanç ayarı uygulanır. Sistem giriş aygıtı hiçbir zaman değiştirilmez.

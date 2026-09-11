@@ -5,44 +5,36 @@ tanımlanmış-ama-uygulanmamış planlar — kaybolmadan takip etmek için var.
 değişikliği burada anlatılmaz; ilgili kaynak dosyalar ve (varsa) `git stash`
 girdisi referans verilir.
 
-## Karar bekleyen
-
-### 1. Gürültü bastırma: kanıt zayıf, kapalı kalıyor — 7 Eylül 2026
-
-**Önceki kayıt düzeltildi.** Bu bölümde daha önce "gürültü tabanını %55 düşürüyor"
-yazıyordu; o sayılar hatalıydı. A/B çiftinin her iki kaydında da `noiseFloor` ve
-`speechThreshold` alanları **0**, yani hiç kaydedilmemiş (bkz. madde 2). Gürültü
-tabanı hakkında elimizde veri yok.
-
-Aynı gürültülü ortam, 19 saniye arayla aynı cümle. Gerçekten ölçülen:
-
-| | Açık | Kapalı |
-|---|---|---|
-| Turbo güveni | 0.759 | 0.796 |
-| Zayıf token oranı | 0.140 | 0.162 |
-| peakLevel | 0.867 | 0.131 |
-| rmsLevel | 0.0632 | 0.0183 |
-
-**Metin farkı (asıl kanıt):** "güncel uygulamayı kullanmıyorum" açıkken "güncel
-uygulama yapıyorum", kapalıyken doğru. "kapatış yapmanı" açıkken "tabataç
-yapmanı", kapalıyken doğru.
-
-**Gözlem:** VPIO seviyeyi ~3.5 kat yükseltmiş (rms 0.018 → 0.063). Bu kendi AGC'si.
-Agresif kazanç artı telefon görüşmesi için ayarlanmış gürültü bastırmanın Whisper'ın
-güvendiği yapıyı bozması makul bir açıklama, ama doğrulanmadı.
-
-**Sınır:** Tek çift. Güven farkı küçük, tek başına anlamlı değil. İkna edici olan
-metin farkı, o da n=1. "Gürültüyü azaltıyor" iddiasını destekleyecek hiçbir
-ölçümümüz yok.
-
-**Karar:** Deneysel ve varsayılan kapalı kalıyor. Ölçümü engelleyen tanı bugı
-9 Eylül 2026'da çözüldü (aşağıya bak), yani gürültü tabanı karşılaştırması artık
-yapılabilir. Yeni bir gürültülü ortam fırsatında tekrarlanmalı: aynı cümle, toggle
-açık ve kapalı, History → Ses tanısı'ndaki "Gürültü tabanı" satırı.
-
----
-
 ## Uygulandı
+
+### Gürültü bastırma kaldırıldı — 11 Eylül 2026
+
+Ölçüldü ve kaldırıldı. Aynı oturumda, aynı ortamda, 20 dakika içinde:
+
+| | Gürültü tabanı (medyan) | Güven (ort) |
+|---|---|---|
+| Açık (n=3) | 0.00195 | 0.668 |
+| Kapalı (n=9) | 0.00882 | 0.759 |
+
+Voice Processing I/O gürültü tabanını yaklaşık **4.5 kat** düşürüyor — yani
+teknik olarak çalışıyor. Ama tanıma belirgin biçimde kötüleşiyor. Açıkken
+alınan bir kayıt: "İyicek olay, back-endler, bekliklerini kaldıralım";
+kapatıldıktan iki dakika sonra aynı ortamda: "Yaklaşan son tarihler kısmı için
+tasarım araştırmasını yapacağız."
+
+Sonuç: **daha az gürültü daha iyi tanıma demek değil.** VPIO telefon görüşmesi
+için ayarlanmış; gürültüyle birlikte Whisper'ın güvendiği yapıyı da eziyor.
+
+7 Eylül'deki n=1 ölçüm de aynı yönü göstermişti. Ayrıca 9 Eylül'de hoparlörün
+yakalama aygıtı olarak seçilmesini bu özellik tetiklemişti
+(`docs/debug/CASE-speaker-selected-as-microphone.md`).
+
+Kaldırılanlar: `VoiceProcessingCaptureDriver`, `AppSettings.noiseSuppression`
+(kayıtlı anahtar migration ile siliniyor), Ayarlar'daki toggle,
+`AudioDiagnostics.voiceProcessingFallbackReason`, gated donanım testi.
+**Korunanlar:** 80 Hz high-pass, uyarlanabilir konuşma eşiği ve gürültü
+tabanı/eşik tanı alanları — bunlar bağımsız çalışıyor ve ölçüm için gerekli.
+
 
 ### Tanı alanları sessizce siliniyordu — 9 Eylül 2026'da düzeltildi
 

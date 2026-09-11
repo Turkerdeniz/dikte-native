@@ -544,7 +544,7 @@ final class AppModel: ObservableObject {
         guard let audioLevelSink else {
             throw DikteError.message("Ses seviyesi hattı hazırlanamadı.")
         }
-        try await recorder.start(restarting: restarting, noiseSuppression: settings.noiseSuppression) { [weak self] in
+        try await recorder.start(restarting: restarting) { [weak self] in
             self?.receiveFirstAudioSample()
         } onLevel: { [audioLevelSink] level in
             audioLevelSink.yield(level)

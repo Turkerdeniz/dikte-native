@@ -6,7 +6,6 @@ final class AppSettings: ObservableObject {
         static let language = "language"
         static let hotKey = "hotKey"
         static let codingHotKey = "codingHotKey"
-        static let noiseSuppression = "noiseSuppression"
         static let automaticPaste = "automaticPaste"
         static let maximumRecording = "maximumRecording"
         static let overlayPosition = "overlayPosition"
@@ -20,7 +19,6 @@ final class AppSettings: ObservableObject {
     @Published var language: RecognitionLanguage { didSet { defaults.set(language.rawValue, forKey: Key.language) } }
     @Published var hotKey: HotKeyConfiguration { didSet { save(hotKey, key: Key.hotKey) } }
     @Published var codingHotKey: HotKeyConfiguration { didSet { save(codingHotKey, key: Key.codingHotKey) } }
-    @Published var noiseSuppression: Bool { didSet { defaults.set(noiseSuppression, forKey: Key.noiseSuppression) } }
     @Published var automaticPaste: Bool { didSet { defaults.set(automaticPaste, forKey: Key.automaticPaste) } }
     @Published var maximumRecording: Double { didSet { defaults.set(maximumRecording, forKey: Key.maximumRecording) } }
     @Published var overlayPosition: OverlayPosition { didSet { defaults.set(overlayPosition.rawValue, forKey: Key.overlayPosition) } }
@@ -38,7 +36,6 @@ final class AppSettings: ObservableObject {
         if let data = defaults.data(forKey: Key.codingHotKey), let value = try? JSONDecoder().decode(HotKeyConfiguration.self, from: data) {
             codingHotKey = value
         } else { codingHotKey = .optionE }
-        noiseSuppression = defaults.object(forKey: Key.noiseSuppression) as? Bool ?? false
         automaticPaste = defaults.object(forKey: Key.automaticPaste) as? Bool ?? true
         maximumRecording = defaults.object(forKey: Key.maximumRecording) as? Double ?? 300
         let storedOverlay = OverlayPosition(rawValue: defaults.string(forKey: Key.overlayPosition) ?? "") ?? .bottomLeft
@@ -67,6 +64,10 @@ final class AppSettings: ObservableObject {
             defaults.set(maximumRecording, forKey: Key.maximumRecording)
         }
         defaults.removeObject(forKey: "smartCleanupEnabled")
+        // The Voice Processing I/O capture path was removed after measurement:
+        // it lowered the measured noise floor about fourfold and made
+        // recognition worse in the same room minutes apart.
+        defaults.removeObject(forKey: "noiseSuppression")
         if migrationVersion < 5 { defaults.set(language.rawValue, forKey: Key.language) }
         if migrationVersion < 4 { defaults.set(overlayPosition.rawValue, forKey: Key.overlayPosition) }
         defaults.set(9, forKey: Key.migrationVersion)

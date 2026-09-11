@@ -10,14 +10,12 @@ final class AudioDiagnosticsCodingTests: XCTestCase {
         var diagnostics = AudioDiagnostics(deviceName: "MacBook Pro Mikrofonu")
         diagnostics.noiseFloor = 0.00281
         diagnostics.speechThreshold = 0.00844
-        diagnostics.voiceProcessingFallbackReason = "test"
 
         let data = try JSONEncoder().encode(diagnostics)
         let decoded = try JSONDecoder().decode(AudioDiagnostics.self, from: data)
 
         XCTAssertEqual(decoded.noiseFloor, 0.00281, accuracy: 0.000_001)
         XCTAssertEqual(decoded.speechThreshold, 0.00844, accuracy: 0.000_001)
-        XCTAssertEqual(decoded.voiceProcessingFallbackReason, "test")
     }
 
     func testTheEncodedFormActuallyCarriesTheKeys() throws {
@@ -49,7 +47,6 @@ final class AudioDiagnosticsCodingTests: XCTestCase {
         diagnostics.transcriptionChunkCount = 9
         diagnostics.vadSpeechDuration = 10
         diagnostics.vadFallbackReason = "vad"
-        diagnostics.voiceProcessingFallbackReason = "vpio"
         diagnostics.noiseFloor = 0.11
         diagnostics.speechThreshold = 0.12
 
