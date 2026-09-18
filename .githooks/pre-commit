@@ -1,0 +1,45 @@
+#!/bin/sh
+# Bu uygulama kişisel konuşma işler. Ses, transkript ve geçmiş dosyaları
+# depoya girmemeli; .gitignore bunu kapsar ama bir kopya farklı bir adla ya da
+# `git add -f` ile yine de eklenebilir. Bu kanca o son adımı durdurur.
+#
+# Kurulum:  git config core.hooksPath .githooks
+# Atlamak:  git commit --no-verify   (ne eklediğini biliyorsan)
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+fail=0
+
+media=$(printf '%s\n' "$staged" | grep -iE '\.(wav|caf|m4a|aiff?|mp3|flac|mov|mp4)$')
+if [ -n "$media" ]; then
+  echo "engellendi: ses/video dosyası eklenmiş."
+  printf '%s\n' "$media" | sed 's/^/  /'
+  fail=1
+fi
+
+userdata=$(printf '%s\n' "$staged" | grep -E '(^|/)(history|corrections)\.json$|(^|/)Diagnostics/')
+if [ -n "$userdata" ]; then
+  echo "engellendi: kullanıcı verisi eklenmiş (transkript geçmişi, öğrenilmiş"
+  echo "düzeltmeler ya da tanı kaydı)."
+  printf '%s\n' "$userdata" | sed 's/^/  /'
+  fail=1
+fi
+
+notes=$(printf '%s\n' "$staged" | grep -E '^(TODO|CONTINUATION)\.md$')
+if [ -n "$notes" ]; then
+  echo "engellendi: ölçüm defteri eklenmiş. Bu dosyalar gerçek dikte"
+  echo "transkriptlerinden alıntı taşır ve yerelde kalır."
+  printf '%s\n' "$notes" | sed 's/^/  /'
+  fail=1
+fi
+
+# Kancanın kendisi bu deseni metin olarak taşımak zorunda, o yüzden muaf.
+scan=$(printf '%s\n' "$staged" | grep -v '^\.githooks/')
+if [ -n "$scan" ] && git diff --cached -U0 -- $scan | grep -q '^+.*/Users/'; then
+  echo "engellendi: mutlak ev dizini yolu eklenmiş (kullanıcı adını sızdırır)."
+  echo "  ~/ kullan."
+  fail=1
+fi
+
+[ "$fail" -eq 1 ] && echo "" && echo "Ayrıntı: CONTRIBUTING.md"
+exit $fail

@@ -87,6 +87,7 @@ Her iki global kısayol da Carbon `RegisterEventHotKey` kullandığı için Acce
 - Kısa ve Net modu ayrı bir sözleşme kullanır: konuşmayı cevaplamadan kısa ve anlaşılır bir metne indirger. Her ayrı istek, karar, soru, kısıt ve özellikle olumsuz talimat ("yapma", "dokunma") korunur; dolgu, tekrar ve vazgeçilen alternatifler atılır. Kullanıcı fikir değiştirdiyse yalnız son karar yazılır. Başlık, şablon veya kod bloğu üretmez, dosya değiştirmez, komut çalıştırmaz.
 - Her iki modda transkript Codex'e JSON veri sınırı içinde iletilir; Ham ve Kısa ve Net kalıcı thread kimlikleri ayrıdır.
 - Bu build Developer ID ile notarize edilmiş genel dağıtım değildir; Türker'in mevcut Mac'i için yerel imzalıdır.
+- Yukarıdaki dosyaların hiçbiri depoya girmez. Katkı verecekler için kurallar ve bunu uygulayan commit kancası [CONTRIBUTING.md](CONTRIBUTING.md) içinde.
 
 ## Prompt araştırma rehberi
 
@@ -172,6 +173,8 @@ Varsayılan kaldırma model, geçmiş ve ayarları korur:
 Betik farklı bundle kimliğine sahip bir uygulamaya dokunmaz; login item ve LaunchServices kaydını kaldırır. Çöp'teki geri alınabilir uygulama yedeği macOS tarafından yeniden indekslenmemesi için `.app.disabled` uzantısıyla tutulur. Hiçbir mod `rm` ile kalıcı silme yapmaz.
 
 ## Daha ayrıntılı belgeler
+
+- [Katkı rehberi](CONTRIBUTING.md)
 
 - [Mimari](docs/ARCHITECTURE.md)
 - [Build, kurulum ve bakım](docs/OPERATIONS.md)
