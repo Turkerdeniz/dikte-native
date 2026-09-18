@@ -13,3 +13,24 @@ build-candidates/
 DerivedData/
 .DS_Store
 graphify-out/
+
+# Kullanıcı verisi. Bu uygulama kişisel konuşma işler; hiçbiri depoya girmez.
+# Uygulamanın kendi yazdığı yer ~/Library/Application Support/Dikte Native,
+# yani normalde buraya düşmezler — bunlar bir kopyanın yanlışlıkla eklenmesine
+# karşı. Ayrıntı için CONTRIBUTING.md.
+*.wav
+*.caf
+*.m4a
+*.aif
+*.aiff
+*.mp3
+*.flac
+*.mov
+*.mp4
+Diagnostics/
+history.json
+corrections.json
+
+# Ölçüm defterleri: gerçek dikte transkriptlerinden alıntı içerir
+TODO.md
+CONTINUATION.md
