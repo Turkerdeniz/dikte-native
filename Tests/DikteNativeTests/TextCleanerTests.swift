@@ -7,8 +7,23 @@ final class TextCleanerTests: XCTestCase {
     }
 
     func testImmediateRepetitionOnly() {
-        XCTAssertEqual(TextCleaner.clean("bu bu bir test test"), "bu bir test")
+        XCTAssertEqual(TextCleaner.clean("bu bu bu bir test test test"), "bu bir test")
         XCTAssertEqual(TextCleaner.clean("çok iyi ve çok hızlı"), "çok iyi ve çok hızlı")
+    }
+
+    /// Reduplication is a productive construction in Turkish, so a pair is not a
+    /// stutter. Collapsing it silently changed what the user said.
+    func testATurkishReduplicationSurvivesCleaning() {
+        for phrase in ["Adım adım ilerleyelim.",
+                       "Dosyaları tek tek kontrol et.",
+                       "Kutuları ayrı ayrı sakla.",
+                       "Rapor hafta hafta güncellenir."] {
+            XCTAssertEqual(TextCleaner.clean(phrase), phrase)
+        }
+    }
+
+    func testARepetitionLoopIsStillCollapsed() {
+        XCTAssertEqual(TextCleaner.clean("yaz yaz yaz yaz bunu"), "yaz bunu")
     }
 
     func testThresholdIsStrictlyGreater() {

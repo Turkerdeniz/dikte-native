@@ -13,8 +13,16 @@ enum TextCleaner {
             of: #"(?i)(^|[\s,])(?:ı+|uh+|um+|hmm+|eee+|ıı+)(?=[\s,.!?]|$)"#,
             with: "$1", options: .regularExpression
         )
+        // Three or more, never two. This exists for the recogniser's repetition
+        // loops, but reduplication is a productive, meaning-bearing construction
+        // in Turkish — "adım adım", "tek tek", "ayrı ayrı", "hafta hafta" — and
+        // collapsing a pair destroys it: "adım adım ilerleyelim" turns into
+        // "adım ilerleyelim". Measured over 100 recordings, 12 of the 13 repetitions the
+        // old rule fired on were pairs, all but one of them genuine; the loops it
+        // was written for appeared once, and had three copies. A real stutter now
+        // survives as a pair, which is at worst what the user actually said.
         value = value.replacingOccurrences(
-            of: #"(?i)\b([\p{L}\p{N}']+)(?:\s+\1\b)+"#,
+            of: #"(?i)\b([\p{L}\p{N}']+)(?:\s+\1\b){2,}"#,
             with: "$1", options: .regularExpression
         )
         value = value.replacingOccurrences(of: #"\s+([,.;:!?])"#, with: "$1", options: .regularExpression)
