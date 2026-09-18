@@ -71,10 +71,93 @@ enum OverlayLayout {
     }
 }
 
+/// Places the waveform's bars from wall-clock time rather than from the arrival
+/// of meter ticks.
+///
+/// The audio clock and the display clock never agree. Measured on a 120 fps
+/// capture of the compact pill, a new bar entered every 17-67 ms instead of
+/// every 33 ms, and ten times over seventeen seconds the strip stalled and then
+/// caught up two or three bars at once. Nothing moved vertically — the pill, the
+/// mode dot, the timer and the bar centres held to within 0.05 px across all
+/// 2029 frames — so the flicker was this lurch, not a layout shift.
+///
+/// Deriving the offset from `now - lastSampleAt` makes the motion a function of
+/// time alone: a late tick becomes a bar whose *height* lands late, which is
+/// invisible, instead of a jump in the scroll, which is not.
+struct WaveformGeometry: Equatable, Sendable {
+    let barWidth: CGFloat
+    let spacing: CGFloat
+
+    var pitch: CGFloat { barWidth + spacing }
+
+    /// Bars needed to cover `width`, plus the one sliding in past the edge.
+    func barCount(forWidth width: CGFloat) -> Int {
+        guard width > 0, pitch > 0 else { return 0 }
+        return Int((width / pitch).rounded(.up)) + 1
+    }
+
+    /// How far the strip has slid since the newest bar entered.
+    ///
+    /// Clamped to one pitch: if the meter stalls, the strip parks instead of
+    /// drifting away from the bars it is drawing. The gap that opens at the
+    /// trailing edge during a stall is narrower than the edge fade, so it is
+    /// never seen.
+    func scrollOffset(since lastSampleAt: Date, at now: Date,
+                      interval: TimeInterval) -> CGFloat {
+        guard interval > 0 else { return 0 }
+        let progress = now.timeIntervalSince(lastSampleAt) / interval
+        return pitch * CGFloat(min(1, max(0, progress)))
+    }
+
+    /// Leading edge of the bar `index` places back from the newest one.
+    func x(forIndexFromNewest index: Int, width: CGFloat, offset: CGFloat) -> CGFloat {
+        width - offset - barWidth - CGFloat(index) * pitch
+    }
+}
+
+/// Drives the overlay's entrance.
+///
+/// The microphone is not live the instant the hotkey fires: the capture session
+/// still has to be built and started, and speech in that window is lost. The
+/// pill used to appear immediately and so invited talking into that gap. It now
+/// waits out most of it and eases in, which makes the entrance finishing the
+/// cue that it is safe to start.
+@MainActor
+final class OverlayRevealState: ObservableObject {
+    static let delay = Duration.milliseconds(150)
+    static let duration: TimeInterval = 0.18
+
+    @Published var isRevealed = false
+}
+
+/// Whether the overlay intends to be on screen, which leads `panel.isVisible`
+/// by the length of the entrance delay.
+///
+/// Reading the intent off the panel instead made every phase change that landed
+/// inside that delay look like a fresh presentation, and `receiveFirstAudioSample()`
+/// lands there whenever the microphone comes up in under 150 ms. The entrance
+/// restarted and the pill arrived another 150 ms late — the opposite of the
+/// point of the delay.
+struct OverlayPresentationState: Equatable, Sendable {
+    private(set) var isPresenting = false
+
+    /// True when this is a new presentation rather than an update to one
+    /// already under way.
+    mutating func show() -> Bool {
+        defer { isPresenting = true }
+        return !isPresenting
+    }
+
+    mutating func hide() { isPresenting = false }
+}
+
 @MainActor
 final class OverlayController {
     private var panel: NSPanel?
     private weak var model: AppModel?
+    private let reveal = OverlayRevealState()
+    private var presentation = OverlayPresentationState()
+    private var revealTask: Task<Void, Never>?
     private var activeDisplayID: CGDirectDisplayID?
     private var workspaceObservers: [NSObjectProtocol] = []
     private var applicationObservers: [NSObjectProtocol] = []
@@ -109,23 +192,49 @@ final class OverlayController {
             panel.hidesOnDeactivate = false
             panel.isMovable = false
             panel.collectionBehavior = [.canJoinAllSpaces, .canJoinAllApplications, .ignoresCycle]
-            panel.contentView = NSHostingView(rootView: OverlayView(model: model))
+            panel.contentView = NSHostingView(rootView: OverlayView(model: model, reveal: reveal))
             self.panel = panel
         }
-        let wasVisible = panel?.isVisible == true
-        if !wasVisible { activeDisplayID = nil }
-        refreshTargetScreen(animateWithinDisplay: wasVisible)
-        panel?.orderFrontRegardless()
+        let isEntrance = presentation.show()
+        if isEntrance { activeDisplayID = nil }
+        refreshTargetScreen(animateWithinDisplay: !isEntrance)
+        if isEntrance {
+            beginReveal()
+        } else if panel?.isVisible == true {
+            // Still inside the entrance delay? Leave it alone; ordering the
+            // panel in here is exactly what the delay exists to prevent.
+            panel?.orderFrontRegardless()
+        }
         startTracking()
     }
 
     func update(model: AppModel) { show(model: model) }
 
     func hide() {
+        presentation.hide()
+        revealTask?.cancel()
+        revealTask = nil
+        reveal.isRevealed = false
         stopTracking()
         panel?.orderOut(nil)
         activeDisplayID = nil
         model = nil
+    }
+
+    /// Ordering the panel in is what is delayed, not just its opacity: a panel
+    /// held on screen at zero alpha still takes its shadow and its tracking
+    /// area with it.
+    private func beginReveal() {
+        revealTask?.cancel()
+        reveal.isRevealed = false
+        revealTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: OverlayRevealState.delay)
+            guard !Task.isCancelled, let self, self.model != nil else { return }
+            self.panel?.orderFrontRegardless()
+            withAnimation(.easeOut(duration: OverlayRevealState.duration)) {
+                self.reveal.isRevealed = true
+            }
+        }
     }
 
     private func resizeAndPosition(_ position: OverlayPosition, on screen: NSScreen,
@@ -302,10 +411,12 @@ private extension NSRect {
 
 private struct OverlayView: View {
     @ObservedObject var model: AppModel
+    @ObservedObject var reveal: OverlayRevealState
     @ObservedObject private var meter: AudioMeterState
 
-    init(model: AppModel) {
+    init(model: AppModel, reveal: OverlayRevealState) {
         self.model = model
+        self.reveal = reveal
         meter = model.audioMeter
     }
 
@@ -315,6 +426,10 @@ private struct OverlayView: View {
         }
         .background(.ultraThickMaterial,
                     in: RoundedRectangle(cornerRadius: model.settings.overlayPosition.isCompact ? 13 : 16))
+        // Opacity and a centred scale only: the pill's frame is fixed, so the
+        // entrance cannot move anything on the Y axis.
+        .opacity(reveal.isRevealed ? 1 : 0)
+        .scaleEffect(reveal.isRevealed ? 1 : 0.94)
     }
 
     private var compactView: some View {
@@ -328,7 +443,8 @@ private struct OverlayView: View {
     private var compactRecordingView: some View {
         HStack(spacing: 8) {
             modeIndicator
-            CompactWaveform(levels: meter.levels)
+            CompactWaveform(levels: meter.levels, lastSampleAt: meter.lastSampleAt,
+                            isLive: model.isRecording)
             recordingTimer.frame(width: 42, alignment: .trailing)
             Button(action: model.stopRecording) {
                 Image(systemName: "stop.fill").font(.system(size: 11, weight: .semibold))
@@ -368,8 +484,10 @@ private struct OverlayView: View {
                 Text(recordingTitle).font(.caption.bold())
                 Text(model.recorder.builtInInputName).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             }.frame(width: 145, alignment: .leading)
-            LiveWaveform(levels: meter.levels)
-            recordingTimer
+            LiveWaveform(levels: meter.levels, lastSampleAt: meter.lastSampleAt,
+                         isLive: model.isRecording)
+            // Without a fixed width the timer resizes the row at 0:09 -> 0:10.
+            recordingTimer.frame(width: 42, alignment: .trailing)
             Button(action: model.stopRecording) { Image(systemName: "stop.fill") }
                 .buttonStyle(.borderless).help("Kaydı durdur")
         }
@@ -383,7 +501,9 @@ private struct OverlayView: View {
 
     private var recordingTitle: String {
         if model.isArming { return "Mikrofon hazırlanıyor…" }
-        return (meter.levels.max() ?? 0) > 0.015 ? "Dinliyorum…" : "Ses bekleniyor"
+        // The history is longer than the title's question needs; asking all of it
+        // would keep "Dinliyorum…" up for two seconds after the room went quiet.
+        return (meter.levels.suffix(34).max() ?? 0) > 0.015 ? "Dinliyorum…" : "Ses bekleniyor"
     }
 
     private func elapsed(at date: Date) -> String {
@@ -436,10 +556,13 @@ private struct OverlayView: View {
 
 private struct CompactWaveform: View {
     let levels: [Float]
+    let lastSampleAt: Date
+    let isLive: Bool
 
     var body: some View {
-        WaveformCanvas(levels: Array(levels.suffix(18)), barWidth: 2.5, spacing: 2,
-                       minimumHeight: 2.5, amplitude: 26)
+        WaveformCanvas(levels: levels, lastSampleAt: lastSampleAt,
+                       geometry: WaveformGeometry(barWidth: 2.5, spacing: 2),
+                       minimumHeight: 2.5, amplitude: 26, isLive: isLive)
         .frame(maxWidth: .infinity, minHeight: 28)
         .accessibilityLabel("Canlı mikrofon ses seviyesi")
     }
@@ -447,10 +570,13 @@ private struct CompactWaveform: View {
 
 private struct LiveWaveform: View {
     let levels: [Float]
+    let lastSampleAt: Date
+    let isLive: Bool
 
     var body: some View {
-        WaveformCanvas(levels: levels, barWidth: 3, spacing: 2.5,
-                       minimumHeight: 3, amplitude: 38)
+        WaveformCanvas(levels: levels, lastSampleAt: lastSampleAt,
+                       geometry: WaveformGeometry(barWidth: 3, spacing: 2.5),
+                       minimumHeight: 3, amplitude: 38, isLive: isLive)
         .frame(maxWidth: .infinity, minHeight: 42)
         .accessibilityLabel("Canlı mikrofon ses seviyesi")
     }
@@ -458,25 +584,47 @@ private struct LiveWaveform: View {
 
 private struct WaveformCanvas: View {
     let levels: [Float]
-    let barWidth: CGFloat
-    let spacing: CGFloat
+    let lastSampleAt: Date
+    let geometry: WaveformGeometry
     let minimumHeight: CGFloat
     let amplitude: CGFloat
+    let isLive: Bool
 
     var body: some View {
-        Canvas(rendersAsynchronously: true) { context, size in
-            guard !levels.isEmpty else { return }
-            let totalWidth = CGFloat(levels.count) * barWidth
-                + CGFloat(max(0, levels.count - 1)) * spacing
-            var x = max(0, (size.width - totalWidth) / 2)
-            for level in levels {
-                let height = max(minimumHeight, CGFloat(level) * amplitude)
-                let rect = CGRect(x: x, y: (size.height - height) / 2,
-                                  width: barWidth, height: height)
-                context.fill(Path(roundedRect: rect, cornerRadius: barWidth / 2),
-                             with: .color(.primary.opacity(0.72)))
-                x += barWidth + spacing
+        // The display's own clock, not the meter's. The strip advances by
+        // elapsed time, so the canvas has to be asked to redraw on the frames
+        // the screen actually presents.
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { context in
+            Canvas(rendersAsynchronously: true) { canvas, size in
+                let offset = geometry.scrollOffset(since: lastSampleAt, at: context.date,
+                                                   interval: AudioMeterState.sampleInterval)
+                let count = min(levels.count, geometry.barCount(forWidth: size.width))
+                guard count > 0 else { return }
+                // Bars run newest-first from the trailing edge, so the strip
+                // fills the viewport rather than floating at half its width,
+                // and the drawn span stays centred on the viewport's own 50%.
+                for index in 0..<count {
+                    let level = levels[levels.count - 1 - index]
+                    let height = max(minimumHeight, CGFloat(level) * amplitude)
+                    let rect = CGRect(x: geometry.x(forIndexFromNewest: index,
+                                                    width: size.width, offset: offset),
+                                      y: (size.height - height) / 2,
+                                      width: geometry.barWidth, height: height)
+                    canvas.fill(Path(roundedRect: rect, cornerRadius: geometry.barWidth / 2),
+                                with: .color(.primary.opacity(isLive ? 0.72 : 0.32)))
+                }
             }
         }
+        .mask(Self.edgeFade)
+    }
+
+    /// Hides bars entering and leaving the viewport. It is wider than one pitch,
+    /// which is also what covers the gap a stalled meter opens at the trailing edge.
+    private static var edgeFade: some View {
+        LinearGradient(stops: [.init(color: .clear, location: 0),
+                               .init(color: .black, location: 0.06),
+                               .init(color: .black, location: 0.94),
+                               .init(color: .clear, location: 1)],
+                       startPoint: .leading, endPoint: .trailing)
     }
 }

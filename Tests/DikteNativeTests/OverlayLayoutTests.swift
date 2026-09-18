@@ -65,6 +65,19 @@ final class OverlayLayoutTests: XCTestCase {
                                                         windows: windows, displays: displays), 11)
     }
 
+    func testPhaseUpdatesInsideTheEntranceDelayDoNotRestartIt() {
+        var presentation = OverlayPresentationState()
+
+        XCTAssertTrue(presentation.show())
+        // arming -> recording lands here whenever the microphone comes up in
+        // under 150 ms, while the panel is deliberately still not visible.
+        XCTAssertFalse(presentation.show())
+        XCTAssertFalse(presentation.show())
+
+        presentation.hide()
+        XCTAssertTrue(presentation.show())
+    }
+
     func testResolverFallsBackWhenCurrentDisplayWasRemoved() {
         let displays = [OverlayDisplaySnapshot(id: 2,
                                                frame: CGRect(x: 0, y: 0, width: 1512, height: 982))]

@@ -14,36 +14,24 @@ private struct AudioMeterSample: Sendable {
 
 /// A thread-safe, small bounded handoff from CoreAudio to the presentation layer.
 /// The callback appends to a queue that can never exceed `maximumPending`, so it
-/// still cannot create an unbounded backlog of MainActor jobs, and the consumer
-/// below still paces itself independently of how fast this is fed.
+/// still cannot create an unbounded backlog of MainActor jobs.
 ///
-/// The queue holds more than one sample because the capture drivers do not
-/// deliver at the same cadence. The plain capture session hands over a buffer
-/// roughly every 20–30 ms, but Voice Processing I/O delivers one every 100 ms
-/// whatever buffer size is requested — the engine ignores the hint. Since the
-/// waveform advances one bar per rendered sample, a single-slot handoff turned
-/// that into a visibly stepping display: ten bars per second instead of thirty.
-/// The voice-processing driver therefore splits its buffer into frame-sized
-/// windows and hands over each one, and this queue keeps them so the consumer
-/// can spread them across the frames they actually represent.
+/// The consumer no longer wakes on delivery. It runs on its own fixed grid and
+/// takes whatever has arrived since the previous tick, which is why the queue
+/// hands back the *peak* of that window rather than its oldest entry: the capture
+/// drivers do not deliver at the same cadence, and folding a window down to its
+/// loudest sample is what a level meter is supposed to show anyway. Taking the
+/// oldest instead made the display lag further behind the microphone the faster
+/// the driver ran.
 final class AudioLevelSink: @unchecked Sendable {
-    static let maximumPending = 4
+    static let maximumPending = 8
 
     private let lock = NSLock()
-    private let continuation: AsyncStream<Void>.Continuation
-    let signals: AsyncStream<Void>
     private var pending: [AudioMeterSample] = []
     private var receivedCount = 0
     private var renderedCount = 0
     private var coalescedCount = 0
     private var maximumDeliveryLagMilliseconds = 0.0
-
-    init() {
-        let pair = AsyncStream<Void>.makeStream(
-            bufferingPolicy: .bufferingNewest(AudioLevelSink.maximumPending))
-        signals = pair.stream
-        continuation = pair.continuation
-    }
 
     func yield(_ level: Float) {
         let sample = AudioMeterSample(level: level.isFinite ? min(1, max(0, level)) : 0,
@@ -56,12 +44,18 @@ final class AudioLevelSink: @unchecked Sendable {
                 coalescedCount += 1
             }
         }
-        _ = continuation.yield(())
     }
 
-    fileprivate func takeNext() -> AudioMeterSample? {
+    /// Everything that arrived since the last tick, folded to its loudest sample.
+    /// The timestamp is the *oldest* folded sample's, so the reported lag stays
+    /// the worst case rather than the flattering one.
+    fileprivate func drainPeak() -> AudioMeterSample? {
         lock.withLock {
-            pending.isEmpty ? nil : pending.removeFirst()
+            guard let oldest = pending.first else { return nil }
+            let peak = pending.max { $0.level < $1.level } ?? oldest
+            coalescedCount += pending.count - 1
+            pending.removeAll(keepingCapacity: true)
+            return AudioMeterSample(level: peak.level, emittedAt: oldest.emittedAt)
         }
     }
 
@@ -71,8 +65,6 @@ final class AudioLevelSink: @unchecked Sendable {
             maximumDeliveryLagMilliseconds = max(maximumDeliveryLagMilliseconds, lagMilliseconds)
         }
     }
-
-    func finish() { continuation.finish() }
 
     func statistics() -> AudioMeterStatistics {
         lock.withLock {
@@ -86,9 +78,40 @@ final class AudioLevelSink: @unchecked Sendable {
 
 @MainActor
 final class AudioMeterState: ObservableObject {
-    static let frameInterval = Duration.milliseconds(34)
+    /// One bar enters the waveform per tick, on a grid anchored at `start()`.
+    ///
+    /// The previous pacer re-anchored itself to the moment each frame actually
+    /// rendered and only woke when a sample arrived, so it drifted against both
+    /// the audio clock and the display clock. It is a grid now, and a tick that
+    /// runs late is absorbed rather than pushed onto the next one.
+    nonisolated static let frameInterval = Duration.microseconds(33_333)
+    nonisolated static let sampleInterval: TimeInterval = 1.0 / 30.0
 
-    @Published private(set) var levels = [Float](repeating: 0, count: 34)
+    /// Long enough to fill the widest waveform viewport the overlay draws.
+    /// The compact pill needs 37 bars at its 4.5 pt pitch and the wide one 45.
+    nonisolated static let historyLength = 64
+
+    /// The grid point after `tick`.
+    ///
+    /// The previous pacer re-anchored on every tick, to the moment the frame
+    /// actually rendered, so each wake-up's scheduling slop was added to the
+    /// next interval and the cadence walked away from 30 Hz. Anchoring to the
+    /// grid absorbs that slop; only a tick late enough to have missed its own
+    /// successor re-anchors, and then it re-anchors once rather than firing a
+    /// burst of catch-up ticks.
+    nonisolated static func nextGridPoint(after tick: ContinuousClock.Instant,
+                                          now: ContinuousClock.Instant) -> ContinuousClock.Instant {
+        let next = tick.advanced(by: frameInterval)
+        return next > now ? next : now.advanced(by: frameInterval)
+    }
+
+    @Published private(set) var levels = [Float](repeating: 0, count: historyLength)
+
+    /// When the newest bar entered. The waveform derives its horizontal offset
+    /// from `now - lastSampleAt` instead of from tick arrivals, so a late tick
+    /// shows up as a bar whose height lands late, never as a jump in the scroll.
+    @Published private(set) var lastSampleAt = Date()
+
     private var consumerTask: Task<Void, Never>?
     private var sink: AudioLevelSink?
     private var smoother = AudioLevelSmoother()
@@ -102,24 +125,25 @@ final class AudioMeterState: ObservableObject {
         let generation = generation
         let sink = AudioLevelSink()
         self.sink = sink
+        lastSampleAt = Date()
         consumerTask = Task { @MainActor [weak self, sink] in
             let clock = ContinuousClock()
-            var nextFrame = clock.now
-            for await _ in sink.signals {
+            var nextTick = clock.now.advanced(by: Self.frameInterval)
+            while !Task.isCancelled {
+                do { try await clock.sleep(until: nextTick) } catch { return }
                 guard !Task.isCancelled, let self, generation == self.generation else { return }
                 let now = clock.now
-                if now < nextFrame {
-                    do { try await clock.sleep(until: nextFrame) }
-                    catch { return }
+                nextTick = Self.nextGridPoint(after: nextTick, now: now)
+
+                // Silence still has to scroll, so a tick with nothing pending
+                // renders a zero bar rather than skipping.
+                let sample = sink.drainPeak()
+                if let sample {
+                    sink.noteRendered(lagMilliseconds: Self.milliseconds(sample.emittedAt.duration(to: now)))
                 }
-                guard !Task.isCancelled, generation == self.generation,
-                      let sample = sink.takeNext() else { continue }
-                let renderedAt = clock.now
-                let lag = sample.emittedAt.duration(to: renderedAt)
-                sink.noteRendered(lagMilliseconds: Self.milliseconds(lag))
                 self.levels.removeFirst()
-                self.levels.append(self.smoother.update(sample.level))
-                nextFrame = renderedAt.advanced(by: Self.frameInterval)
+                self.levels.append(self.smoother.update(sample?.level ?? 0))
+                self.lastSampleAt = Date()
             }
         }
         return sink
@@ -131,12 +155,11 @@ final class AudioMeterState: ObservableObject {
         let statistics = sink?.statistics()
             ?? AudioMeterStatistics(receivedCount: 0, renderedCount: 0,
                                     coalescedCount: 0, maximumDeliveryLagMilliseconds: 0)
-        sink?.finish()
         consumerTask?.cancel()
         consumerTask = nil
         sink = nil
         smoother.reset()
-        if resetLevels { levels = [Float](repeating: 0, count: 34) }
+        if resetLevels { levels = [Float](repeating: 0, count: Self.historyLength) }
         return statistics
     }
 

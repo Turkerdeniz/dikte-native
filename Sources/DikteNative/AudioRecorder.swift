@@ -100,7 +100,6 @@ private final class CaptureOutputDelegate: NSObject, AVCaptureAudioDataOutputSam
     private var cachedSourceBuffer: AVAudioPCMBuffer?
     private var cachedOutputBuffer: AVAudioPCMBuffer?
     private var deliveredFirstSample = false
-    private var lastLevelDelivery = CFAbsoluteTimeGetCurrent()
     var onFirstSample: (@MainActor @Sendable () -> Void)?
     var onLevel: (@Sendable (Float) -> Void)?
 
@@ -123,13 +122,13 @@ private final class CaptureOutputDelegate: NSObject, AVCaptureAudioDataOutputSam
                 deliveredFirstSample = true
                 if let onFirstSample { Task { @MainActor in onFirstSample() } }
             }
-            let now = CFAbsoluteTimeGetCurrent()
-            // The waveform is presentation-only. Thirty updates per second keeps bar movement
-            // fluid without coupling visual refreshes to the full audio callback rate.
-            if now - lastLevelDelivery >= 1.0 / 30.0, let onLevel {
-                lastLevelDelivery = now
-                onLevel(displayLevel(forRMS: rms))
-            }
+            // Every buffer is handed over as it arrives; the meter downstream owns the
+            // display cadence. Dropping buffers here with a wall-clock "not yet" gate
+            // rounded the update rate up to the next whole hardware buffer period, and
+            // because that rounding drifted against the meter's own timer the bar strip
+            // advanced every 17-67 ms instead of every 33 ms, with two- and three-bar
+            // catch-up leaps that read as a flicker.
+            onLevel?(displayLevel(forRMS: rms))
         } catch {
             accumulator.noteConversionError(error.localizedDescription)
         }
