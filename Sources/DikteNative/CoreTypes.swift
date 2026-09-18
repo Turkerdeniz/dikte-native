@@ -183,10 +183,21 @@ struct TranscriptWord: Codable, Equatable, Sendable {
     let text: String
     let probability: Float
 
-    /// Below this a word is worth the user's eye. Deliberately higher than
-    /// `ChunkAcceptancePolicy.weakTokenThreshold`, which decides whether to
-    /// re-run a chunk: drawing attention costs nothing, re-decoding costs time.
-    static let uncertainThreshold: Float = 0.60
+    /// Below this a word is worth the user's eye — the recogniser's worst 5%.
+    ///
+    /// This was 0.60 on the assumption that drawing attention costs nothing.
+    /// Measured against 3,939 words of real history it cost plenty: 0.60 marked
+    /// 22.2% of every transcript, and reading a sample of each confidence band
+    /// in context, only about a quarter of those marks were on a word that was
+    /// actually wrong. The rest were ordinary words — "bir", "yani", "tekrar",
+    /// "önemli" — which score low not because they were misheard but because
+    /// several words were plausible in that slot.
+    ///
+    /// The garbled words cluster much lower: roughly 40% of 0.20-0.30 and 60%
+    /// of everything under 0.20 was genuine nonsense. 0.30 is the 5th percentile
+    /// of the distribution, marks one word in twenty, and is right about half
+    /// the time — a mark the eye can still believe.
+    static let uncertainThreshold: Float = 0.30
 
     var isUncertain: Bool { probability < Self.uncertainThreshold }
 }

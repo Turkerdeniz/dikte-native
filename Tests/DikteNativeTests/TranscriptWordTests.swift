@@ -26,9 +26,22 @@ final class TranscriptWordTests: XCTestCase {
 
     func testAWordTakesItsLeastCertainPiece() {
         // Averaging would hide the doubtful suffix behind a confident stem.
-        let words = build([(" graph", 0.95), ("'ın", 0.30)])
-        XCTAssertEqual(words[0].probability, 0.30, accuracy: 0.001)
+        let words = build([(" graph", 0.95), ("'ın", 0.22)])
+        XCTAssertEqual(words[0].probability, 0.22, accuracy: 0.001)
         XCTAssertTrue(words[0].isUncertain)
+    }
+
+    /// The highlight and the taught-correction gate read the same probabilities
+    /// for opposite reasons, so they must not drift back into one constant: the
+    /// gate has to stay reachable well above where the highlight stops marking.
+    func testTheCorrectionGateReachesFurtherThanTheHighlight() {
+        XCTAssertLessThan(TranscriptWord.uncertainThreshold,
+                          CorrectionRisk.unsureEnoughToRewriteThreshold)
+
+        let misheard = TranscriptWord(text: "kasaya", probability: 0.44)
+        XCTAssertFalse(misheard.isUncertain, "0.44 is too ordinary to mark for the eye")
+        XCTAssertEqual(TextCleaner.uncertainWordForms([misheard]), ["kasaya"],
+                       "but a taught correction still has to be able to rewrite it")
     }
 
     func testAConfidentWordIsNotMarked() {

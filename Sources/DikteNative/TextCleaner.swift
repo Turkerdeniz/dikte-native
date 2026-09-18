@@ -77,7 +77,9 @@ enum TextCleaner {
     }
 
     static func uncertainWordForms(_ words: [TranscriptWord]) -> Set<String> {
-        Set(words.filter(\.isUncertain).map { normalizedWordForm($0.text) })
+        Set(words
+            .filter { $0.probability < CorrectionRisk.unsureEnoughToRewriteThreshold }
+            .map { normalizedWordForm($0.text) })
     }
 
     private static func normalizedWordForm(_ value: String) -> String {

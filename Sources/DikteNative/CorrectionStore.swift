@@ -42,6 +42,20 @@ struct CorrectionCandidate: Identifiable, Equatable, Sendable {
 /// offline, so those corrections are surfaced and require a deliberate choice
 /// instead of being switched on silently.
 enum CorrectionRisk {
+    /// How unsure the recogniser has to have been before a taught correction is
+    /// allowed to rewrite an ordinary word.
+    ///
+    /// This shared `TranscriptWord.uncertainThreshold` until measurement showed
+    /// the two jobs pull opposite ways. The highlight wants precision: a mark
+    /// that is usually wrong is noise, so it belongs at the bottom of the
+    /// distribution. This gate wants reach: a genuine mishearing the user has
+    /// already taught a correction for sits anywhere under ~0.60; the ones
+    /// measured here landed between 0.44 and 0.46. Refusing to apply it there
+    /// brings back the oldest complaint about this feature, that a taught
+    /// correction never seems to do anything. Letting one constant follow the
+    /// highlight down would have done exactly that silently.
+    static let unsureEnoughToRewriteThreshold: Float = 0.60
+
     static func replacesARealWord(_ heard: String, language: RecognitionLanguage) -> Bool {
         guard let code = language.spellCheckerLanguage else { return false }
         let trimmed = heard.trimmingCharacters(in: .whitespacesAndNewlines)
