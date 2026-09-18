@@ -558,6 +558,9 @@ final class AppModel: ObservableObject {
 
     private func receiveFirstAudioSample() {
         guard case .arming(let startedAt, _) = phase else { return }
+        // The microphone is live only now. Everything said since the hotkey was
+        // pressed is gone, so how long that took is worth keeping per recording.
+        recorder.noteArmingLatency(milliseconds: Date().timeIntervalSince(startedAt) * 1_000)
         armingTimeoutTask?.cancel()
         phase = .recording(startedAt: startedAt)
         overlay.update(model: self)

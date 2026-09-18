@@ -51,6 +51,18 @@ private final class SampleAccumulator: @unchecked Sendable {
         }
     }
 
+    /// The hotkey-to-first-packet window, recorded once the first packet lands.
+    /// Set after `reset`, so a restart measures the whole wait rather than only
+    /// the successful attempt — which is the number the user actually lived
+    /// through.
+    func noteArming(totalMilliseconds: Double) {
+        lock.withLock { diagnostics.armingMilliseconds = totalMilliseconds }
+    }
+
+    func noteSessionStart(milliseconds: Double) {
+        lock.withLock { diagnostics.sessionStartMilliseconds = milliseconds }
+    }
+
     func noteConversionError(_ description: String) {
         lock.withLock {
             diagnostics.conversionErrors += 1
@@ -515,8 +527,21 @@ final class AudioRecorder {
         builtInInputName = device.localizedName
         builtInInputID = device.uniqueID
         accumulator.reset(device: device, restartCount: restartCount)
+        let sessionBegan = ContinuousClock.now
         try await driver.start(device: device, accumulator: accumulator,
                                onFirstSample: onFirstSample, onLevel: onLevel)
+        accumulator.noteSessionStart(milliseconds: Self.milliseconds(sessionBegan.duration(to: .now)))
+    }
+
+    /// Recorded from the caller because only it knows when the hotkey fired.
+    func noteArmingLatency(milliseconds: Double) {
+        accumulator.noteArming(totalMilliseconds: milliseconds)
+    }
+
+    private static func milliseconds(_ duration: Duration) -> Double {
+        let components = duration.components
+        return Double(components.seconds) * 1_000
+            + Double(components.attoseconds) / 1_000_000_000_000_000
     }
 
     func stop() async -> AudioCapture {

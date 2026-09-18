@@ -49,9 +49,32 @@ final class AudioDiagnosticsCodingTests: XCTestCase {
         diagnostics.vadFallbackReason = "vad"
         diagnostics.noiseFloor = 0.11
         diagnostics.speechThreshold = 0.12
+        diagnostics.armingMilliseconds = 13
+        diagnostics.sessionStartMilliseconds = 14
 
         let data = try JSONEncoder().encode(diagnostics)
         XCTAssertEqual(try JSONDecoder().decode(AudioDiagnostics.self, from: data), diagnostics)
+    }
+
+    /// The arming window is the reason the overlay's entrance is delayed at all,
+    /// so it has to reach history.json rather than being computed and dropped.
+    func testTheArmingWindowSurvivesAndIsReported() throws {
+        var diagnostics = AudioDiagnostics(deviceName: "MacBook Pro Mikrofonu")
+        diagnostics.armingMilliseconds = 413.2
+        diagnostics.sessionStartMilliseconds = 190.4
+
+        let data = try JSONEncoder().encode(diagnostics)
+        let decoded = try JSONDecoder().decode(AudioDiagnostics.self, from: data)
+
+        XCTAssertEqual(decoded.armingMilliseconds, 413.2, accuracy: 0.001)
+        XCTAssertEqual(decoded.sessionStartMilliseconds, 190.4, accuracy: 0.001)
+        XCTAssertTrue(decoded.summary.contains("hazırlanma 413 ms"), decoded.summary)
+        XCTAssertTrue(decoded.summary.contains("oturum 190 ms"), decoded.summary)
+    }
+
+    /// An unmeasured recording must not report a confident zero.
+    func testAnUnmeasuredArmingWindowIsNotReported() {
+        XCTAssertFalse(AudioDiagnostics(deviceName: "x").summary.contains("hazırlanma"))
     }
 
     func testAnEntryWrittenBeforeTheseFieldsExistedStillDecodes() throws {

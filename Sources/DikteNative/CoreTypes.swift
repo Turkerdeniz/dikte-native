@@ -224,13 +224,28 @@ struct AudioDiagnostics: Codable, Equatable, Sendable {
     var noiseFloor: Float = 0
     var speechThreshold: Float = 0
 
+    /// How long the microphone took to go live, split in two.
+    ///
+    /// `armingMilliseconds` is the window the user can lose speech in: from the
+    /// hotkey firing to the first audio packet arriving. Nothing said in it is
+    /// recorded. The overlay's entrance was delayed by a guessed 150 ms to cover
+    /// it; this is what tells us whether that guess is right, and whether the
+    /// gap is worth closing properly by warming the capture session.
+    ///
+    /// `sessionStartMilliseconds` is the part of that spent building and
+    /// starting the AVCaptureSession. The remainder is waiting on the driver for
+    /// the first buffer, and only the first part could be moved off the hotkey.
+    var armingMilliseconds: Double = 0
+    var sessionStartMilliseconds: Double = 0
+
     init(deviceID: String = "", deviceName: String = "", inputFormat: String = "",
          callbackCount: Int = 0, sampleCount: Int = 0, peakLevel: Float = 0,
          rmsLevel: Float = 0, voicedDuration: TimeInterval = 0, restartCount: Int = 0,
          conversionErrors: Int = 0, vadSegmentCount: Int = 0,
          transcriptionChunkCount: Int = 0, vadSpeechDuration: TimeInterval = 0,
          vadFallbackReason: String? = nil,
-         noiseFloor: Float = 0, speechThreshold: Float = 0) {
+         noiseFloor: Float = 0, speechThreshold: Float = 0,
+         armingMilliseconds: Double = 0, sessionStartMilliseconds: Double = 0) {
         self.deviceID = deviceID; self.deviceName = deviceName; self.inputFormat = inputFormat
         self.callbackCount = callbackCount; self.sampleCount = sampleCount
         self.peakLevel = peakLevel; self.rmsLevel = rmsLevel; self.voicedDuration = voicedDuration
@@ -238,6 +253,8 @@ struct AudioDiagnostics: Codable, Equatable, Sendable {
         self.vadSegmentCount = vadSegmentCount; self.transcriptionChunkCount = transcriptionChunkCount
         self.vadSpeechDuration = vadSpeechDuration; self.vadFallbackReason = vadFallbackReason
         self.noiseFloor = noiseFloor; self.speechThreshold = speechThreshold
+        self.armingMilliseconds = armingMilliseconds
+        self.sessionStartMilliseconds = sessionStartMilliseconds
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -245,6 +262,7 @@ struct AudioDiagnostics: Codable, Equatable, Sendable {
         case voicedDuration, restartCount, conversionErrors, vadSegmentCount, transcriptionChunkCount
         case vadSpeechDuration, vadFallbackReason
         case noiseFloor, speechThreshold
+        case armingMilliseconds, sessionStartMilliseconds
     }
 
     init(from decoder: Decoder) throws {
@@ -272,6 +290,9 @@ struct AudioDiagnostics: Codable, Equatable, Sendable {
         // the noise measurements it was added to collect.
         noiseFloor = try box.decodeIfPresent(Float.self, forKey: .noiseFloor) ?? 0
         speechThreshold = try box.decodeIfPresent(Float.self, forKey: .speechThreshold) ?? 0
+        armingMilliseconds = try box.decodeIfPresent(Double.self, forKey: .armingMilliseconds) ?? 0
+        sessionStartMilliseconds = try box.decodeIfPresent(Double.self,
+                                                           forKey: .sessionStartMilliseconds) ?? 0
     }
 
     var summary: String {
@@ -283,6 +304,10 @@ struct AudioDiagnostics: Codable, Equatable, Sendable {
                             vadSegmentCount, transcriptionChunkCount, vadSpeechDuration)
         }
         if let vadFallbackReason, !vadFallbackReason.isEmpty { value += " · VAD fallback: \(vadFallbackReason)" }
+        if armingMilliseconds > 0 {
+            value += String(format: " · hazırlanma %.0f ms (oturum %.0f ms)",
+                            armingMilliseconds, sessionStartMilliseconds)
+        }
         return value
     }
 }
