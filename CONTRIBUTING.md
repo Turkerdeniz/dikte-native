@@ -50,6 +50,31 @@ Aynısı commit mesajları ve test fixture'ları için de geçerli — ikisi de
 Ölçüm defterleri (`TODO.md`, `CONTINUATION.md`) bu yüzden depoda tutulmuyor;
 ham alıntı taşıdıkları için yerelde kalıyorlar.
 
+## Ölçmeden önce birimi doğrula
+
+Ölçümle karar vermenin en sinsi tuzağı yanlış okuma değil, **doğru okunan
+sayının yanlış birimde olması**. Sonuç ikna edici çıkar, tutarlı görünür ve
+kendini ele vermez.
+
+Bu depoda bir kez oldu. `chunkDiagnostics.sourceStart` saniye cinsinden
+saklanıyor; örnek sayısı sanılıp 16.000'e bölündü. 0,485 saniye böylece
+0,00003 oldu ve bütün kayıtlar "konuşma kaydın ilk anında başlıyor" gibi
+göründü. Buradan çıkan teşhis — sesin baştan kırpıldığı — kendi içinde
+tutarlıydı ve var olmayan bir sorun için bir düzeltme yazılmasına ramak
+kalmıştı. Doğru birimle bakıldığında medyan 0,485 saniyeydi ve aranan
+ilişkinin korelasyonu r = −0,001 çıktı: etki yoktu.
+
+Bir alandan sonuç çıkarmadan önce birimini **ikinci bir kaynaktan** doğrula:
+
+- alanı yazan koda bak (`SpeechSegmenter`, `AudioRecorder`, `CoreTypes`),
+- ya da `Diagnostics/` altındaki metadata gibi aynı değeri başka biçimde
+  gösteren bir çıktıyla karşılaştır,
+- ya da en azından makullük sınırını uygula: birkaç saniyelik bir kayıtta
+  0,00003 saniyelik bir başlangıç değeri bir ölçüm değil, bir birim hatasıdır.
+
+Aynısı milisaniye/saniye, örnek/saniye, byte/örnek ve olasılık/yüzde çiftleri
+için de geçerli. Bir bulgu şaşırtıcıysa, önce birimden şüphelen.
+
 ## Çalışma biçimi
 
 - Küçük değişiklik → doğrula → diff'i incele → commit.
