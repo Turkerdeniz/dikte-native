@@ -41,6 +41,8 @@ final class AppModel: ObservableObject {
     private var armingTimeoutTask: Task<Void, Never>?
     private var maximumRecordingTask: Task<Void, Never>?
     private var performanceTracker: PerformanceTracker?
+    private var captureProcessAgeSeconds: TimeInterval = 0
+    private var captureModelWasResident = false
     private var memoryPressureMonitor: MemoryPressureMonitor?
     private var memoryPressureTask: Task<Void, Never>?
     private var modelReleaseTask: Task<Void, Never>?
@@ -140,6 +142,10 @@ final class AppModel: ObservableObject {
         modelIdleReleaseScheduler.cancel()
         do {
             let startedAt = Date()
+            // Sampled before the preload is scheduled below, so it records the
+            // state the capture actually started in.
+            captureProcessAgeSeconds = ProcessClock.ageSeconds
+            captureModelWasResident = modelStore.isLoaded
             breadcrumbStore.begin(stage: "arming-1", modelLoaded: modelStore.isLoaded,
                                   memoryPressureLevel: memoryPressureLevel)
             performanceTracker = PerformanceTracker()
@@ -559,8 +565,13 @@ final class AppModel: ObservableObject {
     private func receiveFirstAudioSample() {
         guard case .arming(let startedAt, _) = phase else { return }
         // The microphone is live only now. Everything said since the hotkey was
-        // pressed is gone, so how long that took is worth keeping per recording.
-        recorder.noteArmingLatency(milliseconds: Date().timeIntervalSince(startedAt) * 1_000)
+        // pressed is gone, so how long that took is worth keeping per recording,
+        // along with the context it has to be grouped by. Written here rather
+        // than at capture start because a restarting attempt resets the
+        // accumulator, and this runs after the last reset either way.
+        recorder.noteArmingLatency(milliseconds: Date().timeIntervalSince(startedAt) * 1_000,
+                                   processAgeSeconds: captureProcessAgeSeconds,
+                                   modelWasResident: captureModelWasResident)
         armingTimeoutTask?.cancel()
         phase = .recording(startedAt: startedAt)
         overlay.update(model: self)

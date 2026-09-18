@@ -51,6 +51,8 @@ final class AudioDiagnosticsCodingTests: XCTestCase {
         diagnostics.speechThreshold = 0.12
         diagnostics.armingMilliseconds = 13
         diagnostics.sessionStartMilliseconds = 14
+        diagnostics.processAgeSeconds = 15
+        diagnostics.modelWasResident = true
 
         let data = try JSONEncoder().encode(diagnostics)
         XCTAssertEqual(try JSONDecoder().decode(AudioDiagnostics.self, from: data), diagnostics)
@@ -75,6 +77,44 @@ final class AudioDiagnosticsCodingTests: XCTestCase {
     /// An unmeasured recording must not report a confident zero.
     func testAnUnmeasuredArmingWindowIsNotReported() {
         XCTAssertFalse(AudioDiagnostics(deviceName: "x").summary.contains("hazırlanma"))
+    }
+
+    /// The arming figures are only interpretable next to the state the capture
+    /// started in. Grouping them by the process's memory footprint instead was
+    /// a proxy that comes apart the moment the idle-release timer fires.
+    func testTheCaptureContextIsRecordedAndReported() throws {
+        var diagnostics = AudioDiagnostics(deviceName: "x")
+        diagnostics.armingMilliseconds = 116
+        diagnostics.processAgeSeconds = 8.4
+        diagnostics.modelWasResident = false
+
+        let decoded = try JSONDecoder().decode(
+            AudioDiagnostics.self, from: try JSONEncoder().encode(diagnostics))
+
+        XCTAssertEqual(decoded.processAgeSeconds, 8.4, accuracy: 0.001)
+        XCTAssertEqual(decoded.modelWasResident, false)
+        XCTAssertTrue(decoded.summary.contains("süreç yaşı 8 sn"), decoded.summary)
+        XCTAssertTrue(decoded.summary.contains("model bellekte değil"), decoded.summary)
+    }
+
+    /// Absent is not false. A recording made before this field existed did not
+    /// measure residency, and reporting it as "not resident" would be a claim.
+    func testResidencyIsAbsentRatherThanFalseWhenItWasNeverMeasured() throws {
+        let legacy = #"{"deviceName":"x","armingMilliseconds":90}"#
+        let decoded = try JSONDecoder().decode(AudioDiagnostics.self, from: Data(legacy.utf8))
+
+        XCTAssertNil(decoded.modelWasResident)
+        XCTAssertEqual(decoded.processAgeSeconds, 0)
+        XCTAssertFalse(decoded.summary.contains("model bellekte"), decoded.summary)
+        XCTAssertFalse(decoded.summary.contains("süreç yaşı"), decoded.summary)
+    }
+
+    /// Read from the kernel, so it is the real process start rather than
+    /// whenever something first happened to ask.
+    func testProcessAgeIsPositiveAndPlausible() {
+        let age = ProcessClock.ageSeconds
+        XCTAssertGreaterThan(age, 0)
+        XCTAssertLessThan(age, 60 * 60 * 24)
     }
 
     func testAnEntryWrittenBeforeTheseFieldsExistedStillDecodes() throws {

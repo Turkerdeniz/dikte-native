@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 enum ProcessingStage: String, Codable, Sendable {
@@ -229,6 +230,30 @@ extension Array where Element == TranscriptWord {
     }
 }
 
+/// How old this process is.
+///
+/// The arming measurement had to separate a capture made just after launch
+/// from one made while the app was warm, and nothing recorded it: the split
+/// was inferred from the process's memory footprint, which really reports
+/// whether the Whisper model is resident, not how old the process is. Those
+/// come apart as soon as the idle-release timer fires. This makes it a
+/// measurement.
+///
+/// Read from the kernel rather than from a value stored at launch, so it does
+/// not depend on something being called early enough, and has no mutable
+/// global state to get wrong.
+enum ProcessClock {
+    static var ageSeconds: TimeInterval {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
+        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0 else { return 0 }
+        let started = Double(info.kp_proc.p_starttime.tv_sec)
+            + Double(info.kp_proc.p_starttime.tv_usec) / 1_000_000
+        return max(0, Date().timeIntervalSince1970 - started)
+    }
+}
+
 struct AudioDiagnostics: Codable, Equatable, Sendable {
     var deviceID: String = ""
     var deviceName: String = ""
@@ -265,6 +290,13 @@ struct AudioDiagnostics: Codable, Equatable, Sendable {
     var armingMilliseconds: Double = 0
     var sessionStartMilliseconds: Double = 0
 
+    /// The capture's context, recorded so the arming figures can be grouped by
+    /// it instead of by a proxy. `modelWasResident` is optional because a
+    /// recording made before this existed did not measure it, and `false` would
+    /// read as a measurement rather than as a gap.
+    var processAgeSeconds: TimeInterval = 0
+    var modelWasResident: Bool?
+
     init(deviceID: String = "", deviceName: String = "", inputFormat: String = "",
          callbackCount: Int = 0, sampleCount: Int = 0, peakLevel: Float = 0,
          rmsLevel: Float = 0, voicedDuration: TimeInterval = 0, restartCount: Int = 0,
@@ -272,7 +304,8 @@ struct AudioDiagnostics: Codable, Equatable, Sendable {
          transcriptionChunkCount: Int = 0, vadSpeechDuration: TimeInterval = 0,
          vadFallbackReason: String? = nil,
          noiseFloor: Float = 0, speechThreshold: Float = 0,
-         armingMilliseconds: Double = 0, sessionStartMilliseconds: Double = 0) {
+         armingMilliseconds: Double = 0, sessionStartMilliseconds: Double = 0,
+         processAgeSeconds: TimeInterval = 0, modelWasResident: Bool? = nil) {
         self.deviceID = deviceID; self.deviceName = deviceName; self.inputFormat = inputFormat
         self.callbackCount = callbackCount; self.sampleCount = sampleCount
         self.peakLevel = peakLevel; self.rmsLevel = rmsLevel; self.voicedDuration = voicedDuration
@@ -282,6 +315,8 @@ struct AudioDiagnostics: Codable, Equatable, Sendable {
         self.noiseFloor = noiseFloor; self.speechThreshold = speechThreshold
         self.armingMilliseconds = armingMilliseconds
         self.sessionStartMilliseconds = sessionStartMilliseconds
+        self.processAgeSeconds = processAgeSeconds
+        self.modelWasResident = modelWasResident
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -290,6 +325,7 @@ struct AudioDiagnostics: Codable, Equatable, Sendable {
         case vadSpeechDuration, vadFallbackReason
         case noiseFloor, speechThreshold
         case armingMilliseconds, sessionStartMilliseconds
+        case processAgeSeconds, modelWasResident
     }
 
     init(from decoder: Decoder) throws {
@@ -320,6 +356,9 @@ struct AudioDiagnostics: Codable, Equatable, Sendable {
         armingMilliseconds = try box.decodeIfPresent(Double.self, forKey: .armingMilliseconds) ?? 0
         sessionStartMilliseconds = try box.decodeIfPresent(Double.self,
                                                            forKey: .sessionStartMilliseconds) ?? 0
+        processAgeSeconds = try box.decodeIfPresent(TimeInterval.self,
+                                                    forKey: .processAgeSeconds) ?? 0
+        modelWasResident = try box.decodeIfPresent(Bool.self, forKey: .modelWasResident)
     }
 
     var summary: String {
@@ -334,6 +373,12 @@ struct AudioDiagnostics: Codable, Equatable, Sendable {
         if armingMilliseconds > 0 {
             value += String(format: " · hazırlanma %.0f ms (oturum %.0f ms)",
                             armingMilliseconds, sessionStartMilliseconds)
+            if processAgeSeconds > 0 {
+                value += String(format: " · süreç yaşı %.0f sn", processAgeSeconds)
+            }
+            if let modelWasResident {
+                value += modelWasResident ? " · model bellekte" : " · model bellekte değil"
+            }
         }
         return value
     }

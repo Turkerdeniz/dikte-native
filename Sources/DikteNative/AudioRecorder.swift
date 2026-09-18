@@ -63,6 +63,13 @@ private final class SampleAccumulator: @unchecked Sendable {
         lock.withLock { diagnostics.sessionStartMilliseconds = milliseconds }
     }
 
+    func noteCaptureContext(processAgeSeconds: TimeInterval, modelWasResident: Bool) {
+        lock.withLock {
+            diagnostics.processAgeSeconds = processAgeSeconds
+            diagnostics.modelWasResident = modelWasResident
+        }
+    }
+
     func noteConversionError(_ description: String) {
         lock.withLock {
             diagnostics.conversionErrors += 1
@@ -533,9 +540,13 @@ final class AudioRecorder {
         accumulator.noteSessionStart(milliseconds: Self.milliseconds(sessionBegan.duration(to: .now)))
     }
 
-    /// Recorded from the caller because only it knows when the hotkey fired.
-    func noteArmingLatency(milliseconds: Double) {
+    /// Recorded from the caller because only it knows when the hotkey fired and
+    /// what the app's state was at that moment.
+    func noteArmingLatency(milliseconds: Double, processAgeSeconds: TimeInterval,
+                           modelWasResident: Bool) {
         accumulator.noteArming(totalMilliseconds: milliseconds)
+        accumulator.noteCaptureContext(processAgeSeconds: processAgeSeconds,
+                                       modelWasResident: modelWasResident)
     }
 
     private static func milliseconds(_ duration: Duration) -> Double {
