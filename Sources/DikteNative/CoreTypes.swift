@@ -202,6 +202,33 @@ struct TranscriptWord: Codable, Equatable, Sendable {
     var isUncertain: Bool { probability < Self.uncertainThreshold }
 }
 
+extension Array where Element == TranscriptWord {
+    /// The words worth the user's eye, by index.
+    ///
+    /// Position 0 is never one of them. The decoder has no left context at the
+    /// start of a sequence, so its distribution there is flat and the score
+    /// stops meaning what it means everywhere else: measured over 99 recordings
+    /// the first word's median confidence is 0.413 against 0.918 for the rest,
+    /// yet reading the twenty-eight lowest-scoring first words in context, only
+    /// three were actually wrong. It is a calibration artefact, not a quality
+    /// one, and it was concentrated at the most visible word in the transcript —
+    /// a third of all recordings had their opening word marked, and 17% of every
+    /// mark in the history was one.
+    ///
+    /// No lower threshold is used for it instead, because the score carries no
+    /// signal there to threshold: the genuinely wrong first words scored 0.13
+    /// and 0.31, above six correct ones.
+    ///
+    /// Known limit: a recording split into several chunks has the same artefact
+    /// at the start of each, and the word list does not carry chunk boundaries.
+    /// Three quarters of recordings are a single chunk.
+    var uncertainIndices: Set<Int> {
+        Set(enumerated().compactMap { index, word in
+            index > 0 && word.isUncertain ? index : nil
+        })
+    }
+}
+
 struct AudioDiagnostics: Codable, Equatable, Sendable {
     var deviceID: String = ""
     var deviceName: String = ""

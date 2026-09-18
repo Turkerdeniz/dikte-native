@@ -34,6 +34,24 @@ final class TranscriptWordTests: XCTestCase {
     /// The highlight and the taught-correction gate read the same probabilities
     /// for opposite reasons, so they must not drift back into one constant: the
     /// gate has to stay reachable well above where the highlight stops marking.
+    /// The decoder has no left context at position 0, so a low score there is a
+    /// calibration artefact rather than evidence the word is wrong. Marking it
+    /// put an orange word at the head of a third of all transcripts.
+    func testTheOpeningWordIsNeverMarkedHoweverLowItScores() {
+        let words = [TranscriptWord(text: "Tamam,", probability: 0.05),
+                     TranscriptWord(text: "bunu", probability: 0.99),
+                     TranscriptWord(text: "zöktürlem", probability: 0.12)]
+
+        XCTAssertEqual(words.uncertainIndices, [2])
+        XCTAssertTrue(words[0].isUncertain, "the word itself still scores low")
+    }
+
+    func testAnEmptyOrSingleWordTranscriptMarksNothing() {
+        XCTAssertTrue([TranscriptWord]().uncertainIndices.isEmpty)
+        XCTAssertTrue([TranscriptWord(text: "vrımbagil.", probability: 0.12)]
+            .uncertainIndices.isEmpty)
+    }
+
     func testTheCorrectionGateReachesFurtherThanTheHighlight() {
         XCTAssertLessThan(TranscriptWord.uncertainThreshold,
                           CorrectionRisk.unsureEnoughToRewriteThreshold)

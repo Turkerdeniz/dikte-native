@@ -351,7 +351,7 @@ private struct HistoryView: View {
                             Divider(); Text("Whisper’ın duyduğu").font(.headline)
                             if let words = entry.transcriptWords, !words.isEmpty {
                                 UncertainWordsView(words: words)
-                                let unsure = words.filter(\.isUncertain).count
+                                let unsure = words.uncertainIndices.count
                                 Text(unsure > 0
                                      ? "Turuncu işaretli \(unsure) kelimeden Whisper emin değil — düzeltirken önce onlara bak."
                                      : "Whisper bütün kelimelerden makul ölçüde emin.")
@@ -605,13 +605,16 @@ private struct UncertainWordsView: View {
     let words: [TranscriptWord]
 
     var body: some View {
-        Text(words.map(attributed).reduce(AttributedString(), +))
+        let uncertain = words.uncertainIndices
+        return Text(words.enumerated()
+            .map { attributed($0.element, isUncertain: uncertain.contains($0.offset)) }
+            .reduce(AttributedString(), +))
             .textSelection(.enabled)
     }
 
-    private func attributed(_ word: TranscriptWord) -> AttributedString {
+    private func attributed(_ word: TranscriptWord, isUncertain: Bool) -> AttributedString {
         var piece = AttributedString(word.text + " ")
-        if word.isUncertain {
+        if isUncertain {
             piece.foregroundColor = .orange
             piece.underlineStyle = .single
         }
